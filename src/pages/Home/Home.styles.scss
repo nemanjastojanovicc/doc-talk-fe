@@ -2,7 +2,7 @@
 
 .home {
   @include size(100%);
-  @include flex(column, center, center);
+  @include flex(column, center, flex-start);
   @include gap(20px, column);
 
   padding: 16px;
