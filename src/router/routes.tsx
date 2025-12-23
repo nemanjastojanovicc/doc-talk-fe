@@ -56,6 +56,7 @@ export default [
   },
   {
     element: <CommonLayout />,
+    authorized: true,
     routes: [
       {
         path: 'home',
@@ -64,7 +65,6 @@ export default [
       {
         path: 'profile',
         element: Profile,
-        authorized: true,
       },
       {
         path: 'sub/*',

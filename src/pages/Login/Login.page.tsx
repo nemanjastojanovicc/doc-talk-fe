@@ -3,7 +3,6 @@ import { Form } from 'react-final-form';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
-import { API_PATHS } from 'api';
 import { Button, EmailField, PasswordField } from 'components';
 import { APP_URI } from 'config';
 import { useAuth, useTanstackMutation } from 'hooks';
@@ -27,26 +26,35 @@ const Login: React.FC = () => {
   const { setCredentials } = useAuth();
   const navigate = useNavigate();
 
-  const { mutate: mutateLogin, isPending: isPendingLogin } =
-    useTanstackMutation<AuthBody, LoginFormValues>({
-      onSuccess: (data) => {
-        setCredentials(data);
-        navigate(APP_URI.PROFILE);
-      },
-      onError: (error) => {
-        console.error(error);
-        toast.error('Login failed. Please try again.');
-      },
-    });
+  const { isPending: isPendingLogin } = useTanstackMutation<
+    AuthBody,
+    LoginFormValues
+  >({
+    onSuccess: (data) => {
+      setCredentials(data);
+      navigate(APP_URI.PROFILE);
+    },
+    onError: (error) => {
+      console.error(error);
+      toast.error('Login failed. Please try again.');
+    },
+  });
 
   return (
     <Form<LoginFormValues>
       onSubmit={(data) => {
-        mutateLogin({
-          path: API_PATHS.auth.login(),
-          method: 'post',
-          body: data,
+        // mutateLogin({
+        //   path: API_PATHS.auth.login(),
+        //   method: 'post',
+        //   body: data,
+        // });
+
+        setCredentials({
+          account: data as any,
+          accessToken: '12345',
+          refreshToken: '12345',
         });
+        navigate(APP_URI.HOME);
       }}
       render={({ handleSubmit }) => (
         <AuthContainer title="Login" linkInfo={REGISTER_LINK}>

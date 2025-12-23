@@ -5,12 +5,12 @@ import { Field, FieldRenderProps } from 'react-final-form';
 import EyeNotVisibleIcon from 'icons/EyeNotVisible.icon';
 import EyeVisibleIcon from 'icons/EyeVisible.icon';
 
-import {
-  composeValidators,
-  validateRegex,
-  validateRequired,
-  PasswordRegExp,
-} from 'validations';
+// import {
+//   composeValidators,
+//   validateRegex,
+//   validateRequired,
+//   PasswordRegExp,
+// } from 'validations';
 
 import './PasswordField.styles.scss';
 import { IconButton, Input, InputAdornment } from '@mui/material';
@@ -71,13 +71,13 @@ const PasswordField: FC<{ name?: string; label?: string }> = ({
     name={name}
     label={label}
     component={PasswordInput}
-    validate={composeValidators(
-      validateRequired('Password is required.'),
-      validateRegex(
-        'Stronger password needed (mix uppercase, lowercase, number, symbol).',
-        PasswordRegExp,
-      ),
-    )}
+    // validate={composeValidators(
+    //   validateRequired('Password is required.'),
+    //   validateRegex(
+    //     'Stronger password needed (mix uppercase, lowercase, number, symbol).',
+    //     PasswordRegExp,
+    //   ),
+    // )}
   />
 );
 

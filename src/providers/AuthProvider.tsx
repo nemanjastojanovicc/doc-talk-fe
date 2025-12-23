@@ -26,7 +26,8 @@ const AuthProvider: React.FC<Props> = ({ children }) => {
 
   const { data: user, isLoading } = useQuery<User>({
     queryKey: [API_PATHS.user.basicPath()],
-    enabled: !!credentials.accessToken,
+    // enabled: !!credentials.accessToken,
+    enabled: false,
   });
 
   useEffect(() => {
