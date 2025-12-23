@@ -1,0 +1,33 @@
+$flex-directions: ('row', 'row-reverse', 'column', 'column-reverse');
+$flex-justification: (
+  'flex-start',
+  'flex-end',
+  'center',
+  'space-between',
+  'space-around',
+  'space-evenly'
+);
+$flex-alignment: ('flex-start', 'flex-end', 'center', 'stretch', 'baseline');
+
+@function isInvalid($map, $value) {
+  @return index($map, $value) == null;
+}
+
+@mixin flex($direction: row, $justify: flex-start, $align: stretch) {
+  @if (isInvalid($flex-directions, $direction)) {
+    @error 'Invaliid value for `flex-direction` property.';
+  }
+
+  @if (isInvalid($flex-directions, $direction)) {
+    @error 'Invaliid value for `justify-content` property.';
+  }
+
+  @if (isInvalid($flex-directions, $direction)) {
+    @error 'Invaliid value for `align-items` property.';
+  }
+
+  display: flex;
+  flex-direction: $direction;
+  justify-content: $justify;
+  align-items: $align;
+}

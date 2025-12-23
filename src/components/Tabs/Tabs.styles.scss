@@ -1,0 +1,38 @@
+@use '~scss/settings' as *;
+
+.tabs {
+  width: 100%;
+
+  &__header {
+    display: flex;
+    position: relative;
+    border-bottom: 1px solid $color-gray-E4E6;
+    margin-bottom: 16px;
+
+    &__item {
+      font-size: 16px;
+      padding: 8px 16px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: $color-gray-66;
+      position: relative;
+      z-index: 1;
+
+      &--active {
+        color: $color-primary;
+      }
+    }
+
+    &__indicator {
+      position: absolute;
+      bottom: -1px;
+      height: 2px;
+      background-color: $color-primary;
+    }
+  }
+
+  &__content {
+    margin-top: 1.5rem;
+  }
+}

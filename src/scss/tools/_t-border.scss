@@ -1,0 +1,26 @@
+@mixin border($type, $args, $color: black) {
+  @each $o in top right bottom left {
+    $i: index($args, $o);
+    @if $i and
+      $i +
+      1 <=
+      length($args) and
+      (
+        type-of(nth($args, $i + 1)) ==
+          number or
+          nth($args, $i + 1) ==
+          initial or
+          nth($args, $i + 1) ==
+          inherit
+      )
+    {
+      border-#{$o}: nth($args, $i + 1);
+      border-#{$o}-style: $type;
+    } @else if type-of(nth($args, 1)) == number {
+      border-#{$o}-style: $type;
+      border-#{$o}: nth($args, 1);
+    }
+  }
+
+  border-color: $color;
+}

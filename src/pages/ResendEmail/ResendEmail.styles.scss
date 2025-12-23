@@ -1,0 +1,17 @@
+@use '~scss/settings' as *;
+
+.resend-email {
+  .auth-box {
+    @include flex(column, center, center);
+    gap: 1.5rem;
+    min-height: 300px;
+
+    p {
+      text-align: center;
+    }
+
+    > * {
+      width: 100%;
+    }
+  }
+}

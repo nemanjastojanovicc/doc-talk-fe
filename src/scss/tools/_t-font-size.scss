@@ -1,0 +1,64 @@
+@use '../variables' as *;
+@use 'sass:math';
+
+@function strip-unit($num) {
+  @return math.div($num, $num * 0 + 1);
+}
+
+@mixin font($font-size, $line-height, $font-weight: 400) {
+  @include font-size($font-size, $line-height);
+
+  font-weight: $font-weight;
+}
+
+@mixin font-size($font-size, $line-height: none, $important: false) {
+  @if (type-of($font-size) == number) {
+    @if (unit($font-size) != 'px') {
+      @error "`#{$font-size}` needs to be a pixel value.";
+    }
+  } @else {
+    @error "`#{$font-size}` needs to be a number.";
+  }
+
+  @if ($important == true) {
+    $important: !important;
+  } @else if ($important == false) {
+    $important: null;
+  } @else {
+    @error "`#{$important}` needs to be `true` or `false`.";
+  }
+
+  font-size: $font-size $important;
+  font-size: strip-unit(math.div($font-size, $global-font-size)) * 1rem
+    $important;
+
+  @if ($line-height == 'auto') {
+    line-height: ceil(math.div($font-size, $global-font-size)) *
+      ($global-line-height / $font-size)
+      $important;
+  } @else {
+    @if (
+      type-of($line-height) ==
+        number or
+        $line-height ==
+        'inherit' or
+        $line-height ==
+        'normal'
+    ) {
+      line-height: $line-height $important;
+    } @else if ($line-height != 'none' and $line-height != false) {
+      @error "D’oh! `#{$line-height}` is not a valid value for `$line-height`.";
+    }
+  }
+}
+
+@function px-to-rem($px) {
+  @if (type-of($px) == number) {
+    @if (unit($px) != 'px') {
+      @error "`#{$px}` needs to be a pixel value.";
+    }
+  } @else {
+    @error "`#{$px}` needs to be a number.";
+  }
+  @return strip-unit($px / $global-font-size) * 1rem;
+}

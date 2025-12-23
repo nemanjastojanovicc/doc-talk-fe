@@ -1,0 +1,6 @@
+@use '~scss/settings' as *;
+
+.input-field {
+  @include flex(column);
+  gap: 0.5rem;
+}

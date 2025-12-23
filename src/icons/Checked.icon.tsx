@@ -1,0 +1,9 @@
+import React from 'react';
+
+const CheckedIcon: React.FC = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" height="24" width="24">
+    <path d="M10 17.225 5.425 12.65l2.225-2.225 2.35 2.35 6.35-6.35 2.225 2.225Z" />
+  </svg>
+);
+
+export default CheckedIcon;

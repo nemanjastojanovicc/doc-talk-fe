@@ -1,0 +1,33 @@
+@use '~scss/settings' as *;
+
+.home {
+  @include size(100%);
+  @include flex(column, center, center);
+  @include gap(20px, column);
+
+  padding: 16px;
+
+  > * {
+    margin: 0;
+  }
+
+  a {
+    color: $color-white;
+
+    &::before {
+      background-color: $color-white;
+    }
+  }
+
+  .landing-desc {
+    @include font(40px, 50px, 600);
+
+    & + p {
+      @include font(20px, 30px, 300);
+    }
+  }
+
+  svg {
+    @include size(200px);
+  }
+}

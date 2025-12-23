@@ -1,0 +1,27 @@
+@use '~scss/settings' as *;
+
+.error-fallback {
+  @include size(100%);
+  @include flex(column, center, center);
+
+  background-color: white;
+
+  .error-ops {
+    @include font(40px, 50px, 600);
+    margin: 0 0 24px;
+  }
+
+  .error-desc {
+    @include font(20px, 24px, 400);
+
+    margin: 12px 0 0 0;
+    text-align: center;
+  }
+
+  svg {
+    @include size(54px);
+
+    color: $color-black;
+    margin: 32px 0 0 0;
+  }
+}

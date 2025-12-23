@@ -1,0 +1,18 @@
+
+$z-index-stack: ('navigation', 'drawer', 'modal', 'flash');
+
+$z-index-values: ();
+$index-counter: 1000;
+
+@each $index in $z-index-stack {
+  $z-index-values: map-merge($z-index-values, ($index: $index-counter));
+  $index-counter: $index-counter + 10;
+}
+
+@mixin z-index($key, $adder: 0) {
+  @if (map-has-key($z-index-values, $key)) {
+    z-index: map-get($z-index-values, $key) + $adder;
+  } @else {
+    z-index: auto;
+  }
+}

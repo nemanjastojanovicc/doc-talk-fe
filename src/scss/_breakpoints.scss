@@ -1,0 +1,115 @@
+$responsive-lg: 1280px;
+$responsive-md: 1024px;
+$responsive-sm: 768px;
+$responsive-xs: 568px;
+$responsive-xxs: 375px;
+
+$responsive-height: 720px;
+$responsive-modal-width: 1366px;
+$responsive-modal-height: 768px;
+
+$responsive-lg-min: $responsive-lg;
+//
+$responsive-md-max: $responsive-lg - 1px;
+$responsive-md-min: $responsive-md;
+
+//
+$responsive-sm-max: $responsive-md - 1px;
+$responsive-sm-min: $responsive-sm;
+//
+$responsive-xs-max: $responsive-sm - 1px;
+$responsive-xs-min: $responsive-xs;
+//
+$responsive-xxs-max: $responsive-xs - 1px;
+$responsive-xxs-min: $responsive-xxs;
+
+@mixin ipad-landscape() {
+  @media (min-width: $responsive-sm-max) and (max-width: $responsive-lg) {
+    @content;
+  }
+}
+
+@mixin above-tablet-landscape() {
+  @media (min-width: $responsive-sm-max) {
+    @content;
+  }
+}
+
+@mixin laptop() {
+  @media (max-width: $responsive-md-max) {
+    @content;
+  }
+}
+
+@mixin above-tablet() {
+  @media (min-width: $responsive-sm-min) {
+    @content;
+  }
+}
+
+@mixin tablet() {
+  @media (max-width: $responsive-sm) {
+    @content;
+  }
+}
+
+@mixin tablet-only() {
+  @media (max-width: $responsive-sm-max) and (min-width: $responsive-sm-min) {
+    @content;
+  }
+}
+
+@mixin above-phablet() {
+  @media (min-width: $responsive-sm-min) {
+    @content;
+  }
+}
+
+@mixin below-phablet() {
+  @media (max-width: $responsive-xs-min) {
+    @content;
+  }
+}
+
+@mixin phablet() {
+  @media (max-width: $responsive-xs-max) {
+    @content;
+  }
+}
+
+@mixin phablet-only() {
+  @media (max-width: $responsive-xs-max) and (min-width: $responsive-xs-min) {
+    @content;
+  }
+}
+
+@mixin above-mobile() {
+  @media (min-width: $responsive-xs-min) {
+    @content;
+  }
+}
+
+@mixin mobile() {
+  @media (max-width: $responsive-xxs-max) {
+    @content;
+  }
+}
+
+@mixin below-mobile() {
+  @media (max-width: $responsive-xxs-min) {
+    @content;
+  }
+}
+
+@mixin below-responsive-height() {
+  @media (max-height: $responsive-height) {
+    @content;
+  }
+}
+
+@mixin below-rescale-size() {
+  @media (max-width: $responsive-modal-width),
+    (max-height: $responsive-modal-height) {
+    @content;
+  }
+}

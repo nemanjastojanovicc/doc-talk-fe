@@ -1,0 +1,18 @@
+import React from 'react'
+import classNames from "classnames"
+import './{{pascalCase name}}.styles.scss';
+import './{{pascalCase name}}.styles.responsive.scss';
+
+type {{pascalCase name}}Props = {
+  className?:string;
+};
+
+const {{pascalCase name}}: React.FC<{{pascalCase name}}Props> = (props) => {
+  const { children , className } = props;
+
+  const classes=classNames("{{kebabCase name}}", className);
+
+  return <div className={classes}>hello from {{pascalCase name}}!</div>
+};
+
+export default {{pascalCase name}};

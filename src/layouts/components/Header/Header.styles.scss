@@ -1,0 +1,27 @@
+@use '~scss/settings' as *;
+
+$header-height: 56px;
+
+.header {
+  @include flex(row, flex-start, center);
+
+  padding: 8px 16px;
+  height: $header-height;
+
+  svg {
+    @include size(32px);
+  }
+
+  nav {
+    @include flex(row, space-between, center);
+
+    width: 100%;
+    margin-left: 16px;
+  }
+
+  &__left-section,
+  &__right-section {
+    @include flex(row, flex-start, center);
+    @include gap(12px);
+  }
+}

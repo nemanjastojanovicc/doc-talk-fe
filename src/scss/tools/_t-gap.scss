@@ -1,0 +1,12 @@
+$gap-map: (
+  'row': left,
+  'row-reverse': right,
+  'column': top,
+  'column-reverse': bottom,
+);
+
+@mixin gap($gap: 10px, $direction: row) {
+  > :not(:first-child) {
+    margin-#{map-get($gap-map, $direction)}: $gap;
+  }
+}

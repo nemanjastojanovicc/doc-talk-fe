@@ -1,0 +1,7 @@
+@use '~scss/settings' as *;
+
+.subnested {
+  h1 {
+    @include font(18px, 1.5);
+  }
+}

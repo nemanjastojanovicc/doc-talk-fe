@@ -1,0 +1,17 @@
+@use '~scss/settings' as *;
+
+.info {
+  &--loading {
+    @include flex(row, center, center);
+    margin-top: 4rem;
+
+    .loading-spinner {
+      @include size(2.5rem);
+    }
+  }
+
+  &__item {
+    @include flex(row, space-between, center);
+    margin-bottom: 1rem;
+  }
+}

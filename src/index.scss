@@ -1,0 +1,101 @@
+@use '~scss/settings' as *;
+
+html,
+body,
+#root {
+  @include size(100%);
+
+  scroll-behavior: smooth;
+
+  @supports (-webkit-touch-callout: none) {
+    height: calc(100vh - env(safe-area-inset-bottom));
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  @extend %font;
+
+  margin: 0;
+  overscroll-behavior: none;
+
+  a {
+    color: $color-black;
+    text-decoration: none;
+    position: relative;
+
+    &::before {
+      @include size(0, 1px);
+
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+
+      content: '';
+      transition: width 0.25s;
+      background-color: $color-black;
+    }
+
+    &:hover {
+      &::before {
+        width: 100%;
+      }
+    }
+  }
+
+  .active-link {
+    color: $color-primary;
+
+    &::before {
+      background-color: $color-primary;
+    }
+  }
+
+  label {
+    font-weight: 400;
+    font-size: 14px;
+    color: $color-gray-48;
+  }
+
+  .form-group {
+    @include flex(column);
+
+    gap: 0.5rem;
+  }
+
+  .error-text {
+    color: $color-error;
+    font-size: 0.75rem;
+  }
+
+  .submit-button {
+    cursor: pointer;
+
+    &:disabled {
+      background-color: $color-gray-82;
+      cursor: not-allowed;
+    }
+  }
+
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+
+    .submit-button {
+      margin-top: 1rem;
+    }
+  }
+
+  h1 {
+    font-size: 1.75rem;
+    font-weight: 600;
+  }
+
+  p {
+    margin: 0;
+  }
+}

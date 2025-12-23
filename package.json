@@ -1,0 +1,67 @@
+{
+  "name": "react-fe-starter",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/material": "^7.3.6",
+    "@tanstack/react-query": "^5.66.0",
+    "axios": "^0.27.2",
+    "classnames": "^2.3.1",
+    "final-form": "^4.20.10",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-final-form": "^6.5.9",
+    "react-hot-toast": "^2.5.2",
+    "react-router-dom": "^6.3.0",
+    "react-scripts": "^5.0.0",
+    "react-transition-group": "^4.4.2"
+  },
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "prepare": "husky install",
+    "generate": "plop",
+    "gen": "plop",
+    "lint": "eslint --ext .tsx --ext .ts src/ --max-warnings=0",
+    "lint:fix": "yarn lint --fix"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@tanstack/eslint-plugin-query": "^5.66.1",
+    "@types/classnames": "^2.3.1",
+    "@types/node": "^17.0.2",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/react-router-dom": "^5.3.3",
+    "@types/react-transition-group": "^4.4.4",
+    "@vitejs/plugin-react": "^4.0.0",
+    "eslint": "^8.38.0",
+    "husky": "^7.0.4",
+    "path": "^0.12.7",
+    "plop": "^2.7.4",
+    "react-scripts": "^5.0.0",
+    "sass": "^1.32.0",
+    "sass-loader": "^8.0.2",
+    "typescript": "4.5.4",
+    "vite": "^4.3.2",
+    "vite-tsconfig-paths": "^4.2.0"
+  },
+  "resolutions": {
+    "@typescript-eslint/typescript-estree": "5.9.0"
+  },
+  "packageManager": "yarn@3.5.1"
+}

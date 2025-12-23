@@ -1,0 +1,41 @@
+@use '~scss/settings' as *;
+
+.auth-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  width: 100%;
+  background-image: radial-gradient(
+    at 50% 50%,
+    rgb(240, 247, 255),
+    rgb(255, 255, 255)
+  );
+
+  .auth-box {
+    background: white;
+    padding: 2rem;
+    border: 1px solid hsla(220, 20%, 80%, 0.4);
+    border-radius: 0.5rem;
+    box-shadow: rgba(9, 11, 17, 0.05) 0px 5px 15px 0px,
+      rgba(19, 23, 32, 0.05) 0px 15px 35px -5px;
+
+    width: 100%;
+    max-width: 500px;
+
+    .auth-title {
+      text-align: center;
+      color: $color-gray-1a;
+    }
+
+    .form-area {
+      margin-bottom: 1.5rem;
+    }
+
+    .link-container {
+      font-size: 0.875rem;
+      text-align: center;
+      margin-top: 1rem;
+    }
+  }
+}
