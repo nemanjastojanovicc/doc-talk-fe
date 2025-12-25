@@ -8,20 +8,16 @@ import ResendEmail from 'pages/ResendEmail';
 import ResetPassword from 'pages/ResetPassword';
 import VerifyAccount from 'pages/VerifyAccount';
 import React from 'react';
-import { Navigate } from 'react-router-dom';
-import SubRouter from 'router/subrouters/Sub';
+import { Navigate, Outlet } from 'react-router-dom';
 import { ComplexRoute } from './components/Routes/Routes';
-import subNestedRoutes from './subrouters/SubNested/routes';
-
-const SubNested = React.lazy(
-  () => import('./subrouters/SubNested/pages/SubNested'),
-);
+import Patient from 'pages/Patient';
+import ConsultationDetailsPage from 'pages/ConsultationDetails';
 
 export default [
   {
     path: 'login',
     authorized: false,
-    onlyPublic: true, //TODO: add default redirection to '/profile' page
+    onlyPublic: true,
     element: Login,
   },
   {
@@ -67,17 +63,18 @@ export default [
         element: Profile,
       },
       {
-        path: 'sub/*',
-        element: SubRouter,
-      },
-      {
-        path: 'nested-sub',
-        element: (
-          <React.Suspense fallback={<>...</>}>
-            <SubNested />
-          </React.Suspense>
-        ),
-        routes: subNestedRoutes,
+        path: 'patient/:id',
+        element: Outlet,
+        routes: [
+          {
+            path: '',
+            element: Patient,
+          },
+          {
+            path: 'consultations/:consultationId',
+            element: <ConsultationDetailsPage />,
+          },
+        ],
       },
       {
         index: true,

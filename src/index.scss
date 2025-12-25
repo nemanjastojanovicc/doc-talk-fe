@@ -3,12 +3,7 @@
 html,
 body,
 #root {
-  display: flex;
-  flex-direction: column;
-
   @include size(100%);
-
-  scroll-behavior: smooth;
 
   @supports (-webkit-touch-callout: none) {
     height: calc(100vh - env(safe-area-inset-bottom));
