@@ -3,9 +3,12 @@
 $header-height: 56px;
 
 .header {
+  max-width: 1300px;
+  margin: auto;
+
   @include flex(row, flex-start, center);
 
-  padding: 8px 16px;
+  padding: 16px 16px 8px;
   height: $header-height;
 
   svg {
@@ -16,7 +19,6 @@ $header-height: 56px;
     @include flex(row, space-between, center);
 
     width: 100%;
-    margin-left: 16px;
   }
 
   &__left-section,

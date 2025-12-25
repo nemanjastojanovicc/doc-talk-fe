@@ -26,8 +26,4 @@
       @include font(20px, 30px, 300);
     }
   }
-
-  svg {
-    @include size(200px);
-  }
 }
