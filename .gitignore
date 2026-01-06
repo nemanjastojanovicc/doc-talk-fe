@@ -24,3 +24,24 @@ public/assets/videos
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+node_modules/
+backend/venv/
+venv/
+
+# Database (SQLite)
+*.db
+*.sqlite3
+backend/medical.db
+
+# AI temporary files
+backend/uploads/
+uploads/
+
+# Python compiled files
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# Mac system files
+.DS_Store
