@@ -19,6 +19,8 @@ import PatientCardList from './PatientsList';
 import { patients } from 'mock/patients';
 import { Patient } from 'models/Patient';
 import { Button } from 'components';
+import { useQuery } from '@tanstack/react-query';
+import { API_PATHS } from 'api';
 
 /**
  * Heuristic:
@@ -40,6 +42,12 @@ type ActiveFilter = 'needsAttention' | 'active' | null;
 const Home: React.FC = () => {
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>(null);
+
+  const { data } = useQuery({
+    queryKey: [API_PATHS.patients.basicPatientsPath()],
+  });
+
+  console.log({ data });
 
   const filteredPatients = useMemo(() => {
     const query = search.toLowerCase();
