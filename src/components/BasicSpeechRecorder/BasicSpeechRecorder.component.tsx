@@ -209,7 +209,7 @@ const BasicSpeechRecorder: FC<Props> = ({ patientId, onUploaded }) => {
   );
 
   return (
-    <Box sx={{ display: 'grid', gap: 2, maxWidth: 900 }}>
+    <Box sx={{ display: 'grid', gap: 2 }}>
       {/* Controls */}
       <Card
         elevation={0}
