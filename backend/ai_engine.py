@@ -1,6 +1,6 @@
 import whisper
 import os
-import ollama  # Ensure this is at the top with other imports
+import ollama
 import json    # Needed to parse the AI's response
 import re # We use this to find JSON in the AI's text
 # --- AI SETUP ---
