@@ -7,6 +7,7 @@ import {
   Divider,
   Stack,
 } from '@mui/material';
+import BasicSpeechRecorder from 'components/BasicSpeechRecorder';
 import { patients } from 'mock/patients';
 import { needsAttention } from 'pages/Home/Home.page';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -189,6 +190,13 @@ const PatientDetailsPage = () => {
           </CardContent>
         </Card>
       </Box>
+
+      <BasicSpeechRecorder
+        patientId={'1'}
+        onUploaded={(res) => {
+          console.log(res);
+        }}
+      />
 
       {/* CONSULTATIONS */}
       <Card>
