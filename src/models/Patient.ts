@@ -37,6 +37,8 @@ export type ConsultationSummary = {
   doctorNotes?: string;
   aiSummary?: string;
   aiRecommendations?: string[];
+
+  patient: Patient;
 };
 
 export type Patient = {
@@ -45,6 +47,7 @@ export type Patient = {
   // Identity
   firstName: string;
   lastName: string;
+  fullName: string;
   dateOfBirth: string;
   gender: Gender;
 

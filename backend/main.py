@@ -48,18 +48,7 @@ def build_medical_record(raw: Any) -> Dict[str, Any]:
         "diagnosesHistory": ensure_list(raw.get("diagnosesHistory")),
     }
 
-def serialize_consultation(consultation: Consultation) -> Dict[str, Any]:
-    ai_recs = parse_json_value(consultation.aiRecommendations, [])
-    return {
-        "id": consultation.id,
-        "date": consultation.date,
-        "doctorId": consultation.doctorId,
-        "transcript": consultation.transcript,
-        "aiSummary": consultation.aiSummary,
-        "aiRecommendations": ensure_list(ai_recs),
-    }
-
-def serialize_patient(patient: Patient) -> Dict[str, Any]:
+def build_patient_payload(patient: Patient) -> Dict[str, Any]:
     medical_record = build_medical_record(
         parse_json_value(patient.medicalRecord, {})
     )
@@ -73,12 +62,10 @@ def serialize_patient(patient: Patient) -> Dict[str, Any]:
         "id": patient.id,
         "firstName": patient.firstName,
         "lastName": patient.lastName,
+        "fullName": f"{patient.firstName} {patient.lastName}",
         "dateOfBirth": patient.dateOfBirth,
         "gender": patient.gender,
         "medicalRecord": medical_record,
-        "consultations": [
-            serialize_consultation(c) for c in (patient.consultations or [])
-        ],
         "assignedDoctorIds": assigned_doctor_ids,
         "isActive": patient.isActive,
         "createdAt": "",
@@ -90,6 +77,35 @@ def serialize_patient(patient: Patient) -> Dict[str, Any]:
     if isinstance(lifestyle, dict) and lifestyle:
         payload["lifestyle"] = lifestyle
 
+    return payload
+
+def serialize_consultation(
+    consultation: Consultation,
+    include_patient: bool = False
+) -> Dict[str, Any]:
+    ai_recs = parse_json_value(consultation.aiRecommendations, [])
+    payload = {
+        "id": consultation.id,
+        "date": consultation.date,
+        "doctorId": consultation.doctorId,
+        "transcript": consultation.transcript,
+        "aiSummary": consultation.aiSummary,
+        "aiRecommendations": ensure_list(ai_recs),
+    }
+
+    if include_patient and consultation.patient:
+        patient_payload = build_patient_payload(consultation.patient)
+        patient_payload["consultations"] = []
+        payload["patient"] = patient_payload
+
+    return payload
+
+def serialize_patient(patient: Patient) -> Dict[str, Any]:
+    payload = build_patient_payload(patient)
+    payload["consultations"] = [
+        serialize_consultation(c, include_patient=True)
+        for c in (patient.consultations or [])
+    ]
     return payload
 
 def get_session():
@@ -265,7 +281,10 @@ async def analyze_session(
         session.commit()
         session.refresh(new_visit)
 
-        return {"success": True, "data": serialize_consultation(new_visit)}
+        return {
+            "success": True,
+            "data": serialize_consultation(new_visit, include_patient=True),
+        }
 
     except Exception as e:
         print(f"❌ Error during processing: {e}")
@@ -273,49 +292,28 @@ async def analyze_session(
 
 @app.get("/history/{patient_id}")
 def get_history(patient_id: str, session: Session = Depends(get_session)):
-    statement = select(Consultation).where(Consultation.patientId == patient_id)
+    statement = (
+        select(Consultation)
+        .where(Consultation.patientId == patient_id)
+        .order_by(Consultation.date.desc())
+    )
     consultations = session.exec(statement).all()
-    return [serialize_consultation(consultation) for consultation in consultations]
+    return [
+        serialize_consultation(consultation, include_patient=True)
+        for consultation in consultations
+    ]
 @app.get("/consultations/{consultation_id}/full")
 def get_full_consultation_details(
     consultation_id: str, 
     session: Session = Depends(get_session)
 ):
-    """
-    Returns the complete information for a specific visit, 
-    including the patient's name and identity details.
-    """
     # 1. Fetch the consultation
     consultation = session.get(Consultation, consultation_id)
     
     if not consultation:
         raise HTTPException(status_code=404, detail="Consultation not found")
 
-    # 2. Because of our Relationship in models.py, 
-    # we can easily access the patient data
-    patient = consultation.patient
-
-    # 3. Clean up the AI Recommendations (turn JSON string back into a list)
-    try:
-        recommendations = json.loads(consultation.aiRecommendations or "[]")
-    except:
-        recommendations = [consultation.aiRecommendations]
-
-    # 4. Return a combined "Report" object
-    return {
-        "consultation_id": consultation.id,
-        "date": consultation.date,
-        "patient": {
-            "id": patient.id,
-            "fullName": f"{patient.firstName} {patient.lastName}",
-            "dob": patient.dateOfBirth
-        },
-        "medical_results": {
-            "transcript": consultation.transcript,
-            "soap_note": consultation.aiSummary,
-            "diagnoses": recommendations
-        }
-    }
+    return serialize_consultation(consultation, include_patient=True)
 @app.get("/all-visits")
 def get_all_visits_with_names(session: Session = Depends(get_session)):
     """

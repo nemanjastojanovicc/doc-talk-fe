@@ -9,11 +9,19 @@ export const formatAiSummary = (raw?: string): string => {
     const parsed = JSON.parse(trimmed);
     if (parsed && typeof parsed === 'object') {
       const order = ['subjective', 'objective', 'assessment', 'plan'];
+      const lowerKeyed = Object.fromEntries(
+        Object.entries(parsed as Record<string, unknown>).map(([k, v]) => [
+          k.toLowerCase(),
+          v,
+        ]),
+      );
 
       const lines = order
         .map((key) => {
-          const value = parsed[key as keyof typeof parsed];
+          const value = lowerKeyed[key];
+
           if (!value) return null;
+
           return `${key[0].toUpperCase()}${key.slice(1)}: ${String(value)}`;
         })
         .filter(Boolean) as string[];

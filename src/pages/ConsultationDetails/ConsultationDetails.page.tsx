@@ -18,12 +18,9 @@ import { useQuery } from '@tanstack/react-query';
 import { API_PATHS } from 'api';
 import { getConsultationFull } from 'api/consultations';
 import utils from 'utils';
+import { formatAiSummary } from 'pages/Patient/utils';
 
-type Props = {
-  patientName?: string;
-};
-
-const ConsultationDetailsPage = ({ patientName = 'Nemca Car' }: Props) => {
+const ConsultationDetailsPage = () => {
   const { consultationId } = useParams();
 
   const { data: consultation } = useQuery({
@@ -33,6 +30,8 @@ const ConsultationDetailsPage = ({ patientName = 'Nemca Car' }: Props) => {
     queryFn: () => getConsultationFull(consultationId ?? ''),
     enabled: Boolean(consultationId),
   });
+
+  console.log({ consultation });
 
   if (!consultation) return <></>;
 
@@ -59,7 +58,8 @@ const ConsultationDetailsPage = ({ patientName = 'Nemca Car' }: Props) => {
             Consultation
           </Typography>
           <Typography color="text.secondary">
-            {patientName} • {utils.formatDate(consultation.date)}
+            {consultation.patient?.fullName} •{' '}
+            {utils.formatDate(consultation.date)}
           </Typography>
         </Box>
 
@@ -78,7 +78,9 @@ const ConsultationDetailsPage = ({ patientName = 'Nemca Car' }: Props) => {
             <Typography variant="h6">AI Summary</Typography>
             <Divider sx={{ my: 1 }} />
 
-            <Typography variant="body2">{consultation.aiSummary}</Typography>
+            <Typography variant="body2">
+              {formatAiSummary(consultation.aiSummary)}
+            </Typography>
           </CardContent>
         </Card>
       )}
