@@ -85,6 +85,14 @@ function toastError(e: AxiosError | unknown) {
 // eslint-disable-next-line @typescript-eslint/no-empty-function
 function noop(): any {}
 
+const formatDate = (rawDate: string): string => {
+  const parsed = new Date(rawDate);
+
+  if (Number.isNaN(parsed.getTime())) return rawDate;
+
+  return parsed.toLocaleString();
+};
+
 export default {
   noop,
   toastError,
@@ -92,4 +100,5 @@ export default {
   convertObjToFormData,
   convertFormDataToJSONObject,
   debounce,
+  formatDate,
 };

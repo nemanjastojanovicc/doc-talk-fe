@@ -9,6 +9,9 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  List,
+  ListItem,
+  ListItemText,
   Stack,
   Typography,
 } from '@mui/material';
@@ -471,20 +474,23 @@ const BasicSpeechRecorder: FC<Props> = ({ patientId, onUploaded }) => {
               </Typography>
 
               {recommendations.length > 0 ? (
-                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                <List dense disablePadding sx={{ pl: 1 }}>
                   {recommendations.map((r, idx) => (
-                    <Chip
-                      key={`${r}-${idx}`}
-                      label={r}
-                      size="small"
-                      variant="outlined"
-                      sx={{
-                        borderRadius: 2,
-                        fontWeight: 700,
-                      }}
-                    />
+                    <ListItem key={`${r}-${idx}`} disableGutters>
+                      <ListItemText
+                        primary={`• ${r}`}
+                        primaryTypographyProps={{
+                          variant: 'body2',
+                          sx: {
+                            fontWeight: 600,
+                            whiteSpace: 'normal',
+                            overflowWrap: 'anywhere',
+                          },
+                        }}
+                      />
+                    </ListItem>
                   ))}
-                </Stack>
+                </List>
               ) : (
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                   —

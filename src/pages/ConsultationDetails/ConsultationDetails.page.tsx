@@ -13,8 +13,11 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SaveIcon from '@mui/icons-material/Save';
 
-import { mockConsultations } from 'mock/consultations';
 import { useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { API_PATHS } from 'api';
+import { getConsultationFull } from 'api/consultations';
+import utils from 'utils';
 
 type Props = {
   patientName?: string;
@@ -23,9 +26,13 @@ type Props = {
 const ConsultationDetailsPage = ({ patientName = 'Nemca Car' }: Props) => {
   const { consultationId } = useParams();
 
-  const consultation = mockConsultations.find(
-    ({ id }) => id === consultationId,
-  );
+  const { data: consultation } = useQuery({
+    queryKey: [
+      API_PATHS.consultations.consultationFullPath(consultationId ?? ''),
+    ],
+    queryFn: () => getConsultationFull(consultationId ?? ''),
+    enabled: Boolean(consultationId),
+  });
 
   if (!consultation) return <></>;
 
@@ -52,7 +59,7 @@ const ConsultationDetailsPage = ({ patientName = 'Nemca Car' }: Props) => {
             Consultation
           </Typography>
           <Typography color="text.secondary">
-            {patientName} • {consultation.date}
+            {patientName} • {utils.formatDate(consultation.date)}
           </Typography>
         </Box>
 

@@ -3,8 +3,10 @@ import shutil
 import uuid
 import json
 from contextlib import asynccontextmanager
+from typing import Any, Dict, List
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session, create_engine, select, SQLModel
 
 # Import your custom logic
@@ -19,25 +21,123 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
 
+def parse_json_value(value: Any, default: Any) -> Any:
+    if value is None:
+        return default
+    if isinstance(value, (dict, list)):
+        return value
+    try:
+        return json.loads(value)
+    except Exception:
+        return default
+
+def ensure_list(value: Any) -> List[Any]:
+    if isinstance(value, list):
+        return value
+    if value is None:
+        return []
+    return [value]
+
+def build_medical_record(raw: Any) -> Dict[str, Any]:
+    if not isinstance(raw, dict):
+        raw = {}
+    return {
+        "chronicConditions": ensure_list(raw.get("chronicConditions")),
+        "allergies": ensure_list(raw.get("allergies")),
+        "medications": ensure_list(raw.get("medications")),
+        "diagnosesHistory": ensure_list(raw.get("diagnosesHistory")),
+    }
+
+def serialize_consultation(consultation: Consultation) -> Dict[str, Any]:
+    ai_recs = parse_json_value(consultation.aiRecommendations, [])
+    return {
+        "id": consultation.id,
+        "date": consultation.date,
+        "doctorId": consultation.doctorId,
+        "transcript": consultation.transcript,
+        "aiSummary": consultation.aiSummary,
+        "aiRecommendations": ensure_list(ai_recs),
+    }
+
+def serialize_patient(patient: Patient) -> Dict[str, Any]:
+    medical_record = build_medical_record(
+        parse_json_value(patient.medicalRecord, {})
+    )
+    vitals = parse_json_value(patient.vitals, {})
+    lifestyle = parse_json_value(patient.lifestyle, {})
+    assigned_doctor_ids = ensure_list(
+        parse_json_value(patient.assignedDoctorIds, [])
+    )
+
+    payload: Dict[str, Any] = {
+        "id": patient.id,
+        "firstName": patient.firstName,
+        "lastName": patient.lastName,
+        "dateOfBirth": patient.dateOfBirth,
+        "gender": patient.gender,
+        "medicalRecord": medical_record,
+        "consultations": [
+            serialize_consultation(c) for c in (patient.consultations or [])
+        ],
+        "assignedDoctorIds": assigned_doctor_ids,
+        "isActive": patient.isActive,
+        "createdAt": "",
+        "updatedAt": "",
+    }
+
+    if isinstance(vitals, dict) and vitals:
+        payload["vitals"] = vitals
+    if isinstance(lifestyle, dict) and lifestyle:
+        payload["lifestyle"] = lifestyle
+
+    return payload
+
 def get_session():
     with Session(engine) as session:
         yield session
+
+class PatientVitals(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    heightCm: float | None = None
+    weightKg: float | None = None
+    bloodPressure: str | None = None
+    heartRate: int | None = None
+
+class PatientLifestyle(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    smoking: str | None = None
+    alcohol: str | None = None
+    physicalActivity: str | None = None
+    diet: str | None = None
+    stressLevel: int | None = None
+
+class PatientCreate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    firstName: str
+    lastName: str
+    dateOfBirth: str
+    gender: str
+    vitals: PatientVitals | None = None
+    lifestyle: PatientLifestyle | None = None
+
+class PatientUpdate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    firstName: str | None = None
+    lastName: str | None = None
+    dateOfBirth: str | None = None
+    gender: str | None = None
+    vitals: PatientVitals | None = None
+    lifestyle: PatientLifestyle | None = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup logic
     create_db_and_tables()
     with Session(engine) as session:
-        # Seed a dummy patient if none exists
-        if not session.exec(select(Patient)).first():
-            dummy = Patient(
-                id="patient-123", 
-                firstName="John", 
-                lastName="Doe", 
-                dateOfBirth="1980-01-01", 
-                gender="male"
-            )
-            session.add(dummy)
+        # Remove legacy seed patient if present
+        dummy = session.get(Patient, "patient-123")
+        if dummy:
+            session.delete(dummy)
             session.commit()
     yield
 
@@ -56,7 +156,68 @@ app.add_middleware(
 
 @app.get("/patients")
 def get_patients(session: Session = Depends(get_session)):
-    return session.exec(select(Patient)).all()
+    patients = session.exec(select(Patient)).all()
+    return [serialize_patient(patient) for patient in patients]
+
+@app.get("/patients/{patient_id}")
+def get_patient(patient_id: str, session: Session = Depends(get_session)):
+    patient = session.get(Patient, patient_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return serialize_patient(patient)
+
+@app.post("/patients")
+def create_patient(
+    payload: PatientCreate,
+    session: Session = Depends(get_session),
+):
+    vitals = payload.vitals.model_dump() if payload.vitals else {}
+    lifestyle = payload.lifestyle.model_dump() if payload.lifestyle else {}
+
+    new_patient = Patient(
+        firstName=payload.firstName,
+        lastName=payload.lastName,
+        dateOfBirth=payload.dateOfBirth,
+        gender=payload.gender,
+        vitals=json.dumps(vitals),
+        lifestyle=json.dumps(lifestyle),
+    )
+    session.add(new_patient)
+    session.commit()
+    session.refresh(new_patient)
+    return serialize_patient(new_patient)
+
+@app.put("/patients/{patient_id}")
+def update_patient(
+    patient_id: str,
+    payload: PatientUpdate,
+    session: Session = Depends(get_session),
+):
+    patient = session.get(Patient, patient_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    updates = payload.model_dump(exclude_unset=True)
+
+    if "firstName" in updates:
+        patient.firstName = updates["firstName"]
+    if "lastName" in updates:
+        patient.lastName = updates["lastName"]
+    if "dateOfBirth" in updates:
+        patient.dateOfBirth = updates["dateOfBirth"]
+    if "gender" in updates:
+        patient.gender = updates["gender"]
+    if "vitals" in updates:
+        vitals = updates["vitals"] or {}
+        patient.vitals = json.dumps(vitals)
+    if "lifestyle" in updates:
+        lifestyle = updates["lifestyle"] or {}
+        patient.lifestyle = json.dumps(lifestyle)
+
+    session.add(patient)
+    session.commit()
+    session.refresh(patient)
+    return serialize_patient(patient)
 
 @app.post("/consultations/analyze")
 async def analyze_session(
@@ -104,7 +265,7 @@ async def analyze_session(
         session.commit()
         session.refresh(new_visit)
 
-        return {"success": True, "data": new_visit}
+        return {"success": True, "data": serialize_consultation(new_visit)}
 
     except Exception as e:
         print(f"❌ Error during processing: {e}")
@@ -113,7 +274,8 @@ async def analyze_session(
 @app.get("/history/{patient_id}")
 def get_history(patient_id: str, session: Session = Depends(get_session)):
     statement = select(Consultation).where(Consultation.patientId == patient_id)
-    return session.exec(statement).all()
+    consultations = session.exec(statement).all()
+    return [serialize_consultation(consultation) for consultation in consultations]
 @app.get("/consultations/{consultation_id}/full")
 def get_full_consultation_details(
     consultation_id: str, 

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Box,
   Card,
@@ -7,31 +8,68 @@ import {
   Divider,
   Stack,
 } from '@mui/material';
+import { Button } from 'components';
 import BasicSpeechRecorder from 'components/BasicSpeechRecorder';
-import { patients } from 'mock/patients';
 import { needsAttention } from 'pages/Home/Home.page';
 import { useNavigate, useParams } from 'react-router-dom';
-
-const calculateAge = (dateOfBirth: string): number => {
-  const birth = new Date(dateOfBirth);
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
-    age--;
-  }
-  return age;
-};
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { API_PATHS } from 'api';
+import { getPatient, updatePatient } from 'api/patients';
+import { getConsultationHistory } from 'api/consultations';
+import { Patient } from 'models/Patient';
+import EditPatientModal from './EditPatientModal';
+import type { EditPatientForm } from './EditPatientModal';
+import { calculateAge, formatAiSummary } from './utils';
+import utils from 'utils';
 
 const PatientDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const patient = patients.find((pat) => pat.id === id);
+  const queryClient = useQueryClient();
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const { data: patient } = useQuery({
+    queryKey: [API_PATHS.patients.basicPatientsPath(id ?? '')],
+    queryFn: () => getPatient(id ?? ''),
+    enabled: Boolean(id),
+  });
+
+  const { data: historyData } = useQuery({
+    queryKey: [API_PATHS.consultations.consultationHistoryPath(id ?? '')],
+    queryFn: () => getConsultationHistory(id ?? ''),
+    enabled: Boolean(id),
+  });
+
+  const patientId = patient?.id ?? '';
+
+  const updatePatientMutation = useMutation({
+    mutationFn: (payload: EditPatientForm) => updatePatient(patientId, payload),
+    onSuccess: (updatedPatient) => {
+      queryClient.setQueryData(
+        [API_PATHS.patients.basicPatientsPath(updatedPatient.id)],
+        updatedPatient,
+      );
+      queryClient.setQueryData<Patient[]>(
+        [API_PATHS.patients.basicPatientsPath()],
+        (prev = []) =>
+          prev.length
+            ? prev.map((p) => (p.id === updatedPatient.id ? updatedPatient : p))
+            : [updatedPatient],
+      );
+      setIsEditOpen(false);
+    },
+    onError: (error: any) => {
+      setEditError(error?.detail ?? error?.message ?? 'Save failed');
+    },
+  });
+
   if (!patient) return null;
 
   const age = calculateAge(patient.dateOfBirth);
   const attention = needsAttention(patient);
+  const consultations = historyData ?? patient.consultations ?? [];
 
   return (
     <Box
@@ -63,7 +101,7 @@ const PatientDetailsPage = () => {
           </Typography>
         </Box>
 
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} alignItems="center">
           <Chip
             label="Active"
             color={patient.isActive ? 'primary' : 'default'}
@@ -74,6 +112,16 @@ const PatientDetailsPage = () => {
             color={attention ? 'warning' : 'default'}
             variant={attention ? 'filled' : 'outlined'}
           />
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => {
+              setEditError(null);
+              setIsEditOpen(true);
+            }}
+          >
+            Edit
+          </Button>
         </Stack>
       </Box>
 
@@ -192,10 +240,19 @@ const PatientDetailsPage = () => {
       </Box>
 
       <BasicSpeechRecorder
-        patientId={'1'}
+        patientId={patient.id}
         onUploaded={(res) => {
           console.log(res);
         }}
+      />
+
+      <EditPatientModal
+        open={isEditOpen}
+        patient={patient}
+        onClose={() => setIsEditOpen(false)}
+        onSave={(form) => updatePatientMutation.mutate(form)}
+        isSaving={updatePatientMutation.isPending}
+        error={editError}
       />
 
       {/* CONSULTATIONS */}
@@ -203,9 +260,9 @@ const PatientDetailsPage = () => {
         <CardContent>
           <Typography variant="h6">Consultations</Typography>
 
-          {patient.consultations.length ? (
+          {consultations.length ? (
             <Stack spacing={2} mt={2}>
-              {patient.consultations.map((c) => (
+              {consultations.map((c) => (
                 <Box
                   key={c.id}
                   onClick={() => navigate(`consultations/${c.id}`)}
@@ -227,7 +284,9 @@ const PatientDetailsPage = () => {
                     gap={2}
                   >
                     <Stack direction="column" justifyContent="space-between">
-                      <Typography fontWeight={500}>{c.date}</Typography>
+                      <Typography fontWeight={500}>
+                        {utils.formatDate(c.date)}
+                      </Typography>
 
                       {c.aiSummary && (
                         <Stack
@@ -236,7 +295,7 @@ const PatientDetailsPage = () => {
                           gap={2}
                         >
                           <Typography variant="body2" color="text.secondary">
-                            AI: {c.aiSummary}
+                            AI: {formatAiSummary(c.aiSummary)}
                           </Typography>
                         </Stack>
                       )}

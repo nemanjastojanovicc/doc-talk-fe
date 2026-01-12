@@ -16,11 +16,13 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import SearchIcon from '@mui/icons-material/Search';
 
 import PatientCardList from './PatientsList';
-import { patients } from 'mock/patients';
+import { createPatient, getPatients } from 'api/patients';
 import { Patient } from 'models/Patient';
 import { Button } from 'components';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { API_PATHS } from 'api';
+import AddPatientModal from './AddPatientModal';
+import type { AddPatientForm } from './AddPatientModal';
 
 /**
  * Heuristic:
@@ -42,17 +44,19 @@ type ActiveFilter = 'needsAttention' | 'active' | null;
 const Home: React.FC = () => {
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>(null);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const { data } = useQuery({
+  const { data = [] } = useQuery({
     queryKey: [API_PATHS.patients.basicPatientsPath()],
+    queryFn: getPatients,
   });
-
-  console.log({ data });
 
   const filteredPatients = useMemo(() => {
     const query = search.toLowerCase();
 
-    return patients.filter((p) => {
+    return data.filter((p) => {
       const matchesSearch = `${p.firstName} ${p.lastName}`
         .toLowerCase()
         .includes(query);
@@ -66,15 +70,38 @@ const Home: React.FC = () => {
 
       return matchesSearch && matchesFilter;
     });
-  }, [search, activeFilter]);
+  }, [search, activeFilter, data]);
 
-  const totalPatients = patients.length;
-  const activePatients = patients.filter((p) => p.isActive).length;
-  const attentionCount = patients.filter(needsAttention).length;
+  const totalPatients = data.length;
+  const activePatients = data.filter((p) => p.isActive).length;
+  const attentionCount = data.filter(needsAttention).length;
 
   const toggleFilter = (filter: ActiveFilter) => {
     setActiveFilter((prev) => (prev === filter ? null : filter));
   };
+
+  const handleOpenAdd = () => {
+    setCreateError(null);
+    setIsAddOpen(true);
+  };
+
+  const handleCloseAdd = () => {
+    setIsAddOpen(false);
+  };
+
+  const createPatientMutation = useMutation({
+    mutationFn: (payload: AddPatientForm) => createPatient(payload),
+    onSuccess: (createdPatient) => {
+      queryClient.setQueryData<Patient[]>(
+        [API_PATHS.patients.basicPatientsPath()],
+        (prev = []) => [createdPatient, ...prev],
+      );
+      setIsAddOpen(false);
+    },
+    onError: (error: any) => {
+      setCreateError(error?.detail ?? error?.message ?? 'Save failed');
+    },
+  });
 
   return (
     <Box
@@ -108,13 +135,19 @@ const Home: React.FC = () => {
           variant="contained"
           startIcon={<AddIcon />}
           sx={{ height: 40 }}
-          onClick={() => {
-            // navigate('/patients/new')
-          }}
+          onClick={handleOpenAdd}
         >
           Add patient
         </Button>
       </Box>
+
+      <AddPatientModal
+        open={isAddOpen}
+        onClose={handleCloseAdd}
+        onSave={(form) => createPatientMutation.mutate(form)}
+        isSaving={createPatientMutation.isPending}
+        error={createError}
+      />
 
       {/* SEARCH */}
       <Stack direction="row" spacing={2} alignItems="center">
