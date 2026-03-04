@@ -80,8 +80,6 @@ const buildPatientPayload = (
     patientPassword: payload.patientPassword?.trim() || undefined,
     vitals,
     lifestyle,
-    email: payload.email?.trim() || null,
-    phoneNumber: payload.phoneNumber?.trim() || null,
   };
 };
 
