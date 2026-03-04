@@ -4,6 +4,8 @@ import { Patient } from 'models/Patient';
 export const basicPatientsPath = (routePath = '') =>
   `patients${routePath && '/'}${routePath}`;
 
+export const myPatientPath = () => basicPatientsPath('me');
+
 export async function getPatients() {
   const { data } = await httpClient.get<Patient[]>(basicPatientsPath());
   return data;
@@ -14,12 +16,18 @@ export async function getPatient(patientId: string) {
   return data;
 }
 
+export async function getMyPatient() {
+  const { data } = await httpClient.get<Patient>(myPatientPath());
+  return data;
+}
+
 export type CreatePatientPayload = {
   firstName: string;
   lastName: string;
   dateOfBirth: string;
   gender: Patient['gender'];
   email?: string;
+  patientPassword?: string;
   phoneNumber?: string;
   heightCm?: string;
   weightKg?: string;
@@ -67,6 +75,9 @@ const buildPatientPayload = (
     lastName: payload.lastName,
     dateOfBirth: payload.dateOfBirth,
     gender: payload.gender,
+    email: payload.email?.trim() || undefined,
+    phoneNumber: payload.phoneNumber?.trim() || undefined,
+    patientPassword: payload.patientPassword?.trim() || undefined,
     vitals,
     lifestyle,
   };

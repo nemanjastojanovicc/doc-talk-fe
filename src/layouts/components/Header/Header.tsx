@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 // import { API_PATHS } from 'api';
 import { BlockUI, Button } from 'components';
+import { APP_URI } from 'config';
 import { useAuth, useCredentials } from 'hooks';
 
 import './Header.styles.scss';
@@ -10,6 +11,9 @@ import './Header.styles.scss';
 const Header = () => {
   const { isLoading, removeCredentials } = useAuth();
   const credentials = useCredentials();
+  const isPatient =
+    credentials?.account?.role === 'patient' ||
+    credentials?.account?.roles?.includes('patient');
 
   // const { mutate: mutateLogout } = useTanstackMutation({
   //   onSuccess: () => {
@@ -24,13 +28,27 @@ const Header = () => {
     <header className="header">
       <nav>
         <span className="header__left-section">
-          <Link to="/">Home</Link>
+          <Link to={isPatient ? APP_URI.PATIENT_HOME : APP_URI.HOME}>Home</Link>
         </span>
         <span className="header__right-section">
           <BlockUI loading={isLoading} />
           {credentials?.account ? (
             <>
               <div>{credentials.account.email}</div>
+              {isPatient ? (
+                <Link to={APP_URI.PATIENT_HOME}>
+                  <Button variant="text">My Health</Button>
+                </Link>
+              ) : (
+                <>
+                  <Link to={APP_URI.USER_INFO}>
+                    <Button variant="text">My Info</Button>
+                  </Link>
+                  <Link to={APP_URI.PROFILE}>
+                    <Button variant="text">Profile</Button>
+                  </Link>
+                </>
+              )}
               <Button
                 variant="text"
                 onClick={() => {

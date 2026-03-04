@@ -44,10 +44,12 @@ const PasswordInput: FC<PasswordInputProps> = ({
           endAdornment={
             <InputAdornment position="end">
               <IconButton
+                type="button"
                 aria-label={
                   showPassword ? 'hide the password' : 'display the password'
                 }
                 onClick={togglePasswordVisibility}
+                onMouseDown={(e) => e.preventDefault()}
                 edge="end"
               >
                 {showPassword ? <EyeNotVisibleIcon /> : <EyeVisibleIcon />}
@@ -63,14 +65,20 @@ const PasswordInput: FC<PasswordInputProps> = ({
   );
 };
 
-const PasswordField: FC<{ name?: string; label?: string }> = ({
+const PasswordField: FC<{
+  name?: string;
+  label?: string;
+  validate?: (value: string, allValues: Record<string, any>) => string | undefined;
+}> = ({
   name = 'password',
   label = 'Password',
+  validate,
 }) => (
   <Field
     name={name}
     label={label}
     component={PasswordInput}
+    validate={validate}
     // validate={composeValidators(
     //   validateRequired('Password is required.'),
     //   validateRegex(

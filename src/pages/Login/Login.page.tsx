@@ -3,6 +3,7 @@ import { Form } from 'react-final-form';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
+import { API_PATHS } from 'api';
 import { Button, EmailField, PasswordField } from 'components';
 import { APP_URI } from 'config';
 import { useAuth, useTanstackMutation } from 'hooks';
@@ -26,35 +27,40 @@ const Login: React.FC = () => {
   const { setCredentials } = useAuth();
   const navigate = useNavigate();
 
-  const { isPending: isPendingLogin } = useTanstackMutation<
+  const { mutate: mutateLogin, isPending: isPendingLogin } = useTanstackMutation<
     AuthBody,
     LoginFormValues
   >({
     onSuccess: (data) => {
       setCredentials(data);
-      navigate(APP_URI.PROFILE);
+      const isPatient =
+        data?.account?.role === 'patient' ||
+        data?.account?.roles?.includes('patient');
+      navigate(isPatient ? APP_URI.PATIENT_HOME : APP_URI.HOME);
     },
     onError: (error) => {
       console.error(error);
-      toast.error('Login failed. Please try again.');
+      const message =
+        (error as any)?.detail ||
+        (error as any)?.message ||
+        'Login failed. Please try again.';
+      toast.error(message);
     },
   });
 
   return (
     <Form<LoginFormValues>
       onSubmit={(data) => {
-        // mutateLogin({
-        //   path: API_PATHS.auth.login(),
-        //   method: 'post',
-        //   body: data,
-        // });
+        const payload = {
+          email: data.email.trim().toLowerCase(),
+          password: data.password,
+        };
 
-        setCredentials({
-          account: data as any,
-          accessToken: '12345',
-          refreshToken: '12345',
+        mutateLogin({
+          path: API_PATHS.auth.login(),
+          method: 'post',
+          body: payload,
         });
-        navigate(APP_URI.HOME);
       }}
       render={({ handleSubmit }) => (
         <AuthContainer title="Login" linkInfo={REGISTER_LINK}>

@@ -4,11 +4,17 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
+  InputAdornment,
   MenuItem,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
+import { Visibility, VisibilityOff } from '@mui/icons-material';
+import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import dayjs from 'dayjs';
 import { Button } from 'components';
 import { Patient } from 'models/Patient';
 
@@ -18,6 +24,7 @@ export type EditPatientForm = {
   dateOfBirth: string;
   gender: Patient['gender'];
   email: string;
+  patientPassword: string;
   phoneNumber: string;
   heightCm: string;
   weightKg: string;
@@ -42,6 +49,7 @@ const mapPatientToForm = (patient: Patient): EditPatientForm => ({
   dateOfBirth: patient.dateOfBirth ?? '',
   gender: patient.gender ?? 'other',
   email: patient.email ?? '',
+  patientPassword: '',
   phoneNumber: patient.phoneNumber ?? '',
   heightCm:
     patient.vitals?.heightCm !== undefined
@@ -60,6 +68,9 @@ const mapPatientToForm = (patient: Patient): EditPatientForm => ({
       : '',
 });
 
+const normalizeSingleDigit = (value: string) =>
+  value.replace(/\D/g, '').slice(0, 1);
+
 const EditPatientModal: React.FC<Props> = ({
   open,
   patient,
@@ -71,6 +82,7 @@ const EditPatientModal: React.FC<Props> = ({
   const [form, setForm] = useState<EditPatientForm>(
     mapPatientToForm(patient),
   );
+  const [showPatientPassword, setShowPatientPassword] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
 
   useEffect(() => {
@@ -130,18 +142,27 @@ const EditPatientModal: React.FC<Props> = ({
           </Stack>
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField
-              label="Date of birth"
-              type="date"
-              value={form.dateOfBirth}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, dateOfBirth: e.target.value }))
-              }
-              fullWidth
-              required
-              inputProps={{ max: today }}
-              InputLabelProps={{ shrink: true }}
-            />
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <DatePicker
+                label="Date of birth"
+                value={form.dateOfBirth ? dayjs(form.dateOfBirth) : null}
+                onChange={(value) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    dateOfBirth: value ? value.format('YYYY-MM-DD') : '',
+                  }))
+                }
+                maxDate={dayjs(today)}
+                openTo="year"
+                views={['year', 'month', 'day']}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    required: true,
+                  },
+                }}
+              />
+            </LocalizationProvider>
             <TextField
               label="Gender"
               select
@@ -168,6 +189,33 @@ const EditPatientModal: React.FC<Props> = ({
               setForm((prev) => ({ ...prev, email: e.target.value }))
             }
             fullWidth
+          />
+          <TextField
+            label="Reset patient password"
+            type={showPatientPassword ? 'text' : 'password'}
+            value={form.patientPassword}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                patientPassword: e.target.value,
+              }))
+            }
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    type="button"
+                    onClick={() => setShowPatientPassword((prev) => !prev)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    edge="end"
+                  >
+                    {showPatientPassword ? <VisibilityOff /> : <Visibility />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+            fullWidth
+            helperText="Leave empty to keep current patient password"
           />
           <TextField
             label="Phone number"
@@ -219,10 +267,13 @@ const EditPatientModal: React.FC<Props> = ({
               type="number"
               value={form.stressLevel}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, stressLevel: e.target.value }))
+                setForm((prev) => ({
+                  ...prev,
+                  stressLevel: normalizeSingleDigit(e.target.value),
+                }))
               }
               fullWidth
-              inputProps={{ min: 1, max: 5 }}
+              inputProps={{ min: 1, max: 5, step: 1 }}
             />
           </Stack>
 

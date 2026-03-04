@@ -5,7 +5,6 @@ import { useAuth } from 'hooks';
 import { Role } from 'models';
 import { APP_URI } from 'config';
 import authService from 'services/authService';
-import credentialsService from 'services/credentialsService';
 
 export type EnhancedRouteProps = {
   authorized?: boolean;
@@ -39,14 +38,23 @@ const EnhancedRoute: React.FC<EnhancedRouteProps> = (props) => {
     }
 
     if (onlyPublic && isLoggedIn) {
-      return <Navigate to={APP_URI.BASE} />;
+      return <Navigate to={APP_URI.HOME} />;
     }
     if (authorizedRoles) {
       const accountAllowed = authService.checkRolesForAccount(
         account,
         authorizedRoles,
       );
-      if (!accountAllowed) credentialsService.removeAuthBody();
+      if (!accountAllowed) {
+        const isPatient =
+          account?.role === 'patient' || account?.roles?.includes('patient');
+        return (
+          <Navigate
+            to={isPatient ? APP_URI.PATIENT_HOME : APP_URI.HOME}
+            replace
+          />
+        );
+      }
     }
 
     if (typeof element === 'function') {

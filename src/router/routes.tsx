@@ -7,6 +7,8 @@ import Register from 'pages/Register';
 import ResendEmail from 'pages/ResendEmail';
 import ResetPassword from 'pages/ResetPassword';
 import VerifyAccount from 'pages/VerifyAccount';
+import UserInfo from 'pages/UserInfo';
+import PatientHome from 'pages/PatientHome';
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { ComplexRoute } from './components/Routes/Routes';
@@ -57,14 +59,27 @@ export default [
       {
         path: 'home',
         element: Home,
+        authorizedRoles: ['admin', 'standard', 'user'],
+      },
+      {
+        path: 'my-health',
+        element: PatientHome,
+        authorizedRoles: ['patient'],
+      },
+      {
+        path: 'user-info',
+        element: UserInfo,
+        authorizedRoles: ['admin', 'standard', 'user'],
       },
       {
         path: 'profile',
         element: Profile,
+        authorizedRoles: ['admin', 'standard', 'user'],
       },
       {
         path: 'patient/:id',
         element: Outlet,
+        authorizedRoles: ['admin', 'standard', 'user'],
         routes: [
           {
             path: '',

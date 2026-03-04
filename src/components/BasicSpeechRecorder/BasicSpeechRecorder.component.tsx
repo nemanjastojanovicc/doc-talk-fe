@@ -1,6 +1,6 @@
 import { analyzeConsultation } from 'api/consultations';
 import Button from 'components/Button';
-import { FC, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, FC, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -97,6 +97,7 @@ const SOAP_ORDER: Array<keyof SoapObject> = [
 const BasicSpeechRecorder: FC<Props> = ({ patientId, onUploaded }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -105,6 +106,7 @@ const BasicSpeechRecorder: FC<Props> = ({ patientId, onUploaded }) => {
   );
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -114,6 +116,7 @@ const BasicSpeechRecorder: FC<Props> = ({ patientId, onUploaded }) => {
     setError(null);
     setResult(null);
     setAudioUrl(null);
+    setSelectedFile(null);
     chunksRef.current = [];
 
     try {
@@ -134,6 +137,7 @@ const BasicSpeechRecorder: FC<Props> = ({ patientId, onUploaded }) => {
         const blob = new Blob(chunksRef.current, {
           type: recorder.mimeType || 'audio/webm',
         });
+        setSelectedFile(null);
         setAudioUrl(URL.createObjectURL(blob));
       };
 
@@ -163,28 +167,32 @@ const BasicSpeechRecorder: FC<Props> = ({ patientId, onUploaded }) => {
       return;
     }
 
-    if (chunksRef.current.length === 0) {
-      setError('No recording available');
-      return;
+    let fileToUpload: File | null = selectedFile;
+
+    if (!fileToUpload) {
+      if (chunksRef.current.length === 0) {
+        setError('No recording or selected file available');
+        return;
+      }
+
+      const recorder = mediaRecorderRef.current;
+      const type = recorder?.mimeType || mimeType || 'audio/webm';
+      const blob = new Blob(chunksRef.current, { type });
+
+      const ext = type.includes('mp4')
+        ? 'm4a'
+        : type.includes('webm')
+        ? 'webm'
+        : 'webm';
+
+      fileToUpload = new File([blob], `recording.${ext}`, { type });
     }
-
-    const recorder = mediaRecorderRef.current;
-    const type = recorder?.mimeType || mimeType || 'audio/webm';
-    const blob = new Blob(chunksRef.current, { type });
-
-    const ext = type.includes('mp4')
-      ? 'm4a'
-      : type.includes('webm')
-      ? 'webm'
-      : 'webm';
-
-    const file = new File([blob], `recording.${ext}`, { type });
 
     setIsUploading(true);
     try {
       const res = (await analyzeConsultation(
         patientId,
-        file,
+        fileToUpload,
       )) as AnalyzeResponse;
 
       if (res?.success) {
@@ -199,6 +207,21 @@ const BasicSpeechRecorder: FC<Props> = ({ patientId, onUploaded }) => {
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const openFilePicker = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setError(null);
+    setResult(null);
+    setSelectedFile(file);
+    chunksRef.current = [];
+    setAudioUrl(URL.createObjectURL(file));
   };
 
   const recommendations = useMemo(
@@ -237,6 +260,20 @@ const BasicSpeechRecorder: FC<Props> = ({ patientId, onUploaded }) => {
             </Typography>
 
             <Stack direction="row" spacing={1}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="audio/*"
+                onChange={handleFileSelected}
+                style={{ display: 'none' }}
+              />
+              <Button
+                onClick={openFilePicker}
+                type="button"
+                disabled={isRecording || isUploading}
+              >
+                Choose file
+              </Button>
               {!isRecording ? (
                 <Button
                   onClick={startRecording}
@@ -292,7 +329,9 @@ const BasicSpeechRecorder: FC<Props> = ({ patientId, onUploaded }) => {
               }}
             >
               <Typography variant="body2" sx={{ mb: 1, fontWeight: 700 }}>
-                Recording preview
+                {selectedFile
+                  ? `Selected file: ${selectedFile.name}`
+                  : 'Recording preview'}
               </Typography>
               <audio controls src={audioUrl} style={{ width: '100%' }} />
             </Box>
