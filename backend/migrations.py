@@ -58,9 +58,39 @@ def _migration_002_add_patient_account_link(connection: sqlite3.Connection) -> N
         connection.execute("ALTER TABLE patient ADD COLUMN patientAccountId TEXT")
 
 
+def _migration_003_add_missing_patient_columns(connection: sqlite3.Connection) -> None:
+    if not _column_exists(connection, "patient", "email"):
+        connection.execute("ALTER TABLE patient ADD COLUMN email TEXT")
+
+    if not _column_exists(connection, "patient", "phoneNumber"):
+        connection.execute("ALTER TABLE patient ADD COLUMN phoneNumber TEXT")
+
+    if not _column_exists(connection, "patient", "medicalRecord"):
+        connection.execute("ALTER TABLE patient ADD COLUMN medicalRecord TEXT DEFAULT '{}' ")
+
+    if not _column_exists(connection, "patient", "vitals"):
+        connection.execute("ALTER TABLE patient ADD COLUMN vitals TEXT DEFAULT '{}' ")
+
+    if not _column_exists(connection, "patient", "lifestyle"):
+        connection.execute("ALTER TABLE patient ADD COLUMN lifestyle TEXT DEFAULT '{}' ")
+
+    if not _column_exists(connection, "patient", "assignedDoctorIds"):
+        connection.execute("ALTER TABLE patient ADD COLUMN assignedDoctorIds TEXT DEFAULT '[]' ")
+
+    if not _column_exists(connection, "patient", "isActive"):
+        connection.execute("ALTER TABLE patient ADD COLUMN isActive INTEGER DEFAULT 1")
+
+    if not _column_exists(connection, "patient", "createdAt"):
+        connection.execute("ALTER TABLE patient ADD COLUMN createdAt TEXT")
+
+    if not _column_exists(connection, "patient", "updatedAt"):
+        connection.execute("ALTER TABLE patient ADD COLUMN updatedAt TEXT")
+
+
 MIGRATIONS: List[Migration] = [
     ("001_add_account_role_and_password_salt", _migration_001_add_account_role_and_password_salt),
     ("002_add_patient_account_link", _migration_002_add_patient_account_link),
+    ("003_add_missing_patient_columns", _migration_003_add_missing_patient_columns),
 ]
 
 
