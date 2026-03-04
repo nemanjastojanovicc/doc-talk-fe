@@ -5,6 +5,19 @@ export const basicPatientsPath = (routePath = '') =>
   `patients${routePath && '/'}${routePath}`;
 
 export const myPatientPath = () => basicPatientsPath('me');
+export const patientAiChatPath = (patientId: string) =>
+  basicPatientsPath(`${patientId}/ai-chat`);
+export const patientAiChatHistoryPath = (patientId: string) =>
+  basicPatientsPath(`${patientId}/ai-chat/history`);
+
+export type PatientAiChatMessage = {
+  id: string;
+  patientId: string;
+  accountId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+};
 
 export async function getPatients() {
   const { data } = await httpClient.get<Patient[]>(basicPatientsPath());
@@ -39,6 +52,21 @@ export type CreatePatientPayload = {
 
 export type UpdatePatientPayload = Partial<CreatePatientPayload>;
 
+type UpdateMedicalRecordPayload = {
+  chronicConditions?: string[];
+  allergies?: string[];
+  diagnosesHistory?: string[];
+  medications?: Array<{
+    name: string;
+    dosage: string;
+    frequency: string;
+  }>;
+};
+
+export type ExtendedUpdatePatientPayload = UpdatePatientPayload & {
+  medicalRecord?: UpdateMedicalRecordPayload;
+};
+
 const toNumberOrNull = (value?: string) => {
   if (value === undefined) return undefined;
   if (value.trim() === '') return null;
@@ -47,7 +75,7 @@ const toNumberOrNull = (value?: string) => {
 };
 
 const buildPatientPayload = (
-  payload: CreatePatientPayload | UpdatePatientPayload,
+  payload: CreatePatientPayload | ExtendedUpdatePatientPayload,
 ) => {
   const vitals =
     payload.heightCm !== undefined ||
@@ -80,6 +108,7 @@ const buildPatientPayload = (
     patientPassword: payload.patientPassword?.trim() || undefined,
     vitals,
     lifestyle,
+    medicalRecord: payload.medicalRecord,
   };
 };
 
@@ -93,12 +122,32 @@ export async function createPatient(payload: CreatePatientPayload) {
 
 export async function updatePatient(
   patientId: string,
-  payload: UpdatePatientPayload,
+  payload: ExtendedUpdatePatientPayload,
 ) {
   const { data } = await httpClient.put<Patient>(
     basicPatientsPath(patientId),
     buildPatientPayload(payload),
   );
 
+  return data;
+}
+
+export async function getPatientAiChatHistory(patientId: string) {
+  const { data } = await httpClient.get<PatientAiChatMessage[]>(
+    patientAiChatHistoryPath(patientId),
+  );
+  return data;
+}
+
+export async function askPatientAi(
+  patientId: string,
+  question: string,
+): Promise<{ answer: string; history: PatientAiChatMessage[] }> {
+  const { data } = await httpClient.post<{ answer: string; history: PatientAiChatMessage[] }>(
+    patientAiChatPath(patientId),
+    {
+      question,
+    },
+  );
   return data;
 }

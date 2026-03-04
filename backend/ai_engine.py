@@ -104,3 +104,53 @@ def analyze_medical_transcript(transcript_text: str):
             "soap_note": f"Manual Analysis: {raw_content[:300] if 'raw_content' in locals() else 'No content'}",
             "recommendations": ["Check Ollama connection", "Ensure gemma:7b is pulled"]
         }
+
+
+def ask_patient_followup(
+    *,
+    patient_context: dict,
+    question: str,
+    conversation: list[dict] | None = None,
+) -> str:
+    """
+    Doctor-facing AI chat for follow-up questions based on one patient's data.
+    """
+    system_instruction = (
+        "You are a concise clinical assistant for doctors. "
+        "Answer only with medically relevant guidance based on the provided patient context. "
+        "If context is insufficient, explicitly say what additional info is needed. "
+        "Do not mention being an AI model. Keep the answer practical and structured in short paragraphs."
+    )
+
+    history = []
+    for item in conversation or []:
+        role = item.get("role")
+        content = item.get("content")
+        if role in {"user", "assistant"} and isinstance(content, str) and content.strip():
+            history.append({"role": role, "content": content.strip()})
+
+    context_text = json.dumps(patient_context, ensure_ascii=False, indent=2)
+
+    messages = [
+        {"role": "system", "content": system_instruction},
+        {
+            "role": "user",
+            "content": (
+                "Patient context (JSON):\n"
+                f"{context_text}\n\n"
+                "Use this context when answering doctor questions."
+            ),
+        },
+        *history,
+        {"role": "user", "content": question.strip()},
+    ]
+
+    try:
+        response = ollama.chat(model=OLLAMA_MODEL, messages=messages)
+        answer = (response.get("message", {}) or {}).get("content", "").strip()
+        if not answer:
+            return "I need more information to provide a safe recommendation."
+        return answer
+    except Exception as e:
+        print(f"❌ Error during follow-up chat: {str(e)}")
+        return "AI assistant is currently unavailable. Please try again shortly."

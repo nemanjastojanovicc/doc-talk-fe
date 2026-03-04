@@ -15,8 +15,8 @@ from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session, create_engine, select, SQLModel
 
 # Import your custom logic
-from models import Patient, Consultation, User, Account
-from ai_engine import transcribe_audio, analyze_medical_transcript
+from models import Patient, Consultation, User, Account, PatientAiChatMessage
+from ai_engine import transcribe_audio, analyze_medical_transcript, ask_patient_followup
 from migrations import run_migrations
 
 # --- DATABASE SETUP ---
@@ -403,6 +403,14 @@ class PatientLifestyle(BaseModel):
     diet: str | None = None
     stressLevel: int | None = None
 
+
+class PatientMedicalRecord(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    chronicConditions: List[str] = []
+    allergies: List[str] = []
+    medications: List[Dict[str, Any]] = []
+    diagnosesHistory: List[str] = []
+
 class PatientCreate(BaseModel):
     model_config = ConfigDict(extra="ignore")
     firstName: str
@@ -426,6 +434,7 @@ class PatientUpdate(BaseModel):
     phoneNumber: str | None = None
     vitals: PatientVitals | None = None
     lifestyle: PatientLifestyle | None = None
+    medicalRecord: PatientMedicalRecord | None = None
 
 
 class SignupPayload(BaseModel):
@@ -440,6 +449,29 @@ class LoginPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     email: str
     password: str
+
+
+class AiChatMessage(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    role: str
+    content: str
+
+
+class PatientAiChatPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    question: str
+    history: List[AiChatMessage] = []
+
+
+def serialize_patient_ai_chat_message(message: PatientAiChatMessage) -> Dict[str, Any]:
+    return {
+        "id": message.id,
+        "patientId": message.patientId,
+        "accountId": message.accountId,
+        "role": message.role,
+        "content": message.content,
+        "createdAt": message.createdAt,
+    }
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -787,6 +819,9 @@ def update_patient(
     if "lifestyle" in updates:
         lifestyle = updates["lifestyle"] or {}
         patient.lifestyle = json.dumps(lifestyle)
+    if "medicalRecord" in updates:
+        medical_record = updates["medicalRecord"] or {}
+        patient.medicalRecord = json.dumps(build_medical_record(medical_record))
     
     # Update the timestamp
     patient.updatedAt = datetime.now().isoformat()
@@ -795,6 +830,132 @@ def update_patient(
     session.commit()
     session.refresh(patient)
     return serialize_patient(patient)
+
+
+@app.post("/patients/{patient_id}/ai-chat")
+def patient_ai_chat(
+    patient_id: str,
+    payload: PatientAiChatPayload,
+    authorization: str | None = Header(default=None),
+    session: Session = Depends(get_session),
+):
+    account = get_account_by_access_token(authorization, session)
+    if account.role == "patient":
+        raise HTTPException(status_code=403, detail="Only doctors can use this endpoint")
+
+    patient = session.get(Patient, patient_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    question = payload.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Question is required")
+
+    stored_messages = session.exec(
+        select(PatientAiChatMessage)
+        .where(PatientAiChatMessage.patientId == patient_id)
+        .where(PatientAiChatMessage.accountId == account.id)
+        .order_by(PatientAiChatMessage.createdAt.asc())
+    ).all()
+
+    recent_consultations = session.exec(
+        select(Consultation)
+        .where(Consultation.patientId == patient_id)
+        .order_by(Consultation.date.desc())
+    ).all()[:5]
+
+    context = {
+        "patient": build_patient_payload(patient),
+        "recentConsultations": [
+            {
+                "date": c.date,
+                "doctorNotes": c.doctorNotes,
+                "aiSummary": c.aiSummary,
+                "aiRecommendations": ensure_list(parse_json_value(c.aiRecommendations, [])),
+            }
+            for c in recent_consultations
+        ],
+    }
+
+    history = [
+        {
+            "role": item.role,
+            "content": item.content,
+        }
+        for item in stored_messages[-20:]
+    ]
+
+    if payload.history:
+        history.extend(
+            [
+                {
+                    "role": item.role,
+                    "content": item.content,
+                }
+                for item in payload.history
+            ]
+        )
+
+    answer = ask_patient_followup(
+        patient_context=context,
+        question=question,
+        conversation=history,
+    )
+
+    user_message = PatientAiChatMessage(
+        patientId=patient_id,
+        accountId=account.id,
+        role="user",
+        content=question,
+    )
+    assistant_message = PatientAiChatMessage(
+        patientId=patient_id,
+        accountId=account.id,
+        role="assistant",
+        content=answer,
+    )
+    session.add(user_message)
+    session.add(assistant_message)
+    session.commit()
+
+    updated_messages = session.exec(
+        select(PatientAiChatMessage)
+        .where(PatientAiChatMessage.patientId == patient_id)
+        .where(PatientAiChatMessage.accountId == account.id)
+        .order_by(PatientAiChatMessage.createdAt.asc())
+    ).all()
+
+    return {
+        "answer": answer,
+        "history": [
+            serialize_patient_ai_chat_message(message)
+            for message in updated_messages
+        ],
+    }
+
+
+@app.get("/patients/{patient_id}/ai-chat/history")
+def patient_ai_chat_history(
+    patient_id: str,
+    authorization: str | None = Header(default=None),
+    session: Session = Depends(get_session),
+):
+    account = get_account_by_access_token(authorization, session)
+    if account.role == "patient":
+        raise HTTPException(status_code=403, detail="Only doctors can use this endpoint")
+
+    patient = session.get(Patient, patient_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    messages = session.exec(
+        select(PatientAiChatMessage)
+        .where(PatientAiChatMessage.patientId == patient_id)
+        .where(PatientAiChatMessage.accountId == account.id)
+        .order_by(PatientAiChatMessage.createdAt.asc())
+    ).all()
+
+    return [serialize_patient_ai_chat_message(message) for message in messages]
 
 @app.post("/consultations/analyze")
 async def analyze_session(

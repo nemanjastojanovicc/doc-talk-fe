@@ -58,9 +58,31 @@ def _migration_002_add_patient_account_link(connection: sqlite3.Connection) -> N
         connection.execute("ALTER TABLE patient ADD COLUMN patientAccountId TEXT")
 
 
+def _migration_003_create_patient_ai_chat_message_table(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS patientaichatmessage (
+            id TEXT PRIMARY KEY,
+            patientId TEXT,
+            accountId TEXT,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            createdAt TEXT
+        )
+        """
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_patientaichatmessage_patientId ON patientaichatmessage (patientId)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_patientaichatmessage_accountId ON patientaichatmessage (accountId)"
+    )
+
+
 MIGRATIONS: List[Migration] = [
     ("001_add_account_role_and_password_salt", _migration_001_add_account_role_and_password_salt),
     ("002_add_patient_account_link", _migration_002_add_patient_account_link),
+    ("003_create_patient_ai_chat_message_table", _migration_003_create_patient_ai_chat_message_table),
 ]
 
 

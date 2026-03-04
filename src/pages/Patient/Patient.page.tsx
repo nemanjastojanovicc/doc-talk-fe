@@ -7,6 +7,7 @@ import {
   Chip,
   Divider,
   Stack,
+  TextField,
 } from '@mui/material';
 import { Button } from 'components';
 import BasicSpeechRecorder from 'components/BasicSpeechRecorder';
@@ -14,21 +15,50 @@ import { needsAttention } from 'pages/Home/Home.page';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { API_PATHS } from 'api';
-import { getPatient, updatePatient } from 'api/patients';
+import {
+  askPatientAi,
+  getPatient,
+  getPatientAiChatHistory,
+  updatePatient,
+} from 'api/patients';
 import { getConsultationHistory } from 'api/consultations';
 import { Patient } from 'models/Patient';
 import EditPatientModal from './EditPatientModal';
 import type { EditPatientForm } from './EditPatientModal';
 import { calculateAge, formatAiSummary } from './utils';
 import utils from 'utils';
+import { useAuth } from 'hooks';
+
+const splitLines = (value: string) =>
+  value
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const parseMedications = (value: string) =>
+  value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [name, dosage, frequency] = line.split('|').map((part) => part.trim());
+      return {
+        name: name || 'Medication',
+        dosage: dosage || 'as advised',
+        frequency: frequency || 'as prescribed',
+      };
+    });
 
 const PatientDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { account } = useAuth();
 
   const queryClient = useQueryClient();
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [aiQuestion, setAiQuestion] = useState('');
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const { data: patient } = useQuery({
     queryKey: [API_PATHS.patients.basicPatientsPath(id ?? '')],
@@ -43,9 +73,20 @@ const PatientDetailsPage = () => {
   });
 
   const patientId = patient?.id ?? '';
+  const isPatientRole =
+    account?.role === 'patient' || account?.roles?.includes('patient');
 
   const updatePatientMutation = useMutation({
-    mutationFn: (payload: EditPatientForm) => updatePatient(patientId, payload),
+    mutationFn: (payload: EditPatientForm) =>
+      updatePatient(patientId, {
+        ...payload,
+        medicalRecord: {
+          chronicConditions: splitLines(payload.chronicConditions),
+          allergies: splitLines(payload.allergies),
+          diagnosesHistory: splitLines(payload.diagnosesHistory),
+          medications: parseMedications(payload.medications),
+        },
+      }),
     onSuccess: (updatedPatient) => {
       queryClient.setQueryData(
         [API_PATHS.patients.basicPatientsPath(updatedPatient.id)],
@@ -62,6 +103,27 @@ const PatientDetailsPage = () => {
     },
     onError: (error: any) => {
       setEditError(error?.detail ?? error?.message ?? 'Save failed');
+    },
+  });
+
+  const { data: aiChatHistory = [] } = useQuery({
+    queryKey: [API_PATHS.patients.patientAiChatHistoryPath(patientId), account?.id],
+    queryFn: () => getPatientAiChatHistory(patientId),
+    enabled: Boolean(patientId) && !isPatientRole,
+  });
+
+  const askAiMutation = useMutation({
+    mutationFn: (question: string) => askPatientAi(patientId, question),
+    onSuccess: (response) => {
+      queryClient.setQueryData(
+        [API_PATHS.patients.patientAiChatHistoryPath(patientId), account?.id],
+        response.history,
+      );
+      setAiQuestion('');
+      setAiError(null);
+    },
+    onError: (error: any) => {
+      setAiError(error?.detail ?? error?.message ?? 'AI request failed');
     },
   });
 
@@ -245,6 +307,74 @@ const PatientDetailsPage = () => {
           console.log(res);
         }}
       />
+
+      {!isPatientRole && (
+        <Card>
+          <CardContent>
+            <Typography variant="h6">AI Doctor Assistant</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Chat history is saved for this patient.
+            </Typography>
+            <Divider sx={{ my: 1.5 }} />
+
+            <Stack spacing={1.5} sx={{ maxHeight: 280, overflowY: 'auto', mb: 2 }}>
+              {aiChatHistory.length ? (
+                aiChatHistory.map((message) => (
+                  <Box
+                    key={message.id}
+                    sx={{
+                      alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
+                      maxWidth: '85%',
+                      px: 1.5,
+                      py: 1,
+                      borderRadius: 2,
+                      bgcolor:
+                        message.role === 'user' ? 'primary.light' : 'grey.100',
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      {message.role === 'user' ? 'Doctor' : 'AI'}
+                    </Typography>
+                    <Typography variant="body2">{message.content}</Typography>
+                  </Box>
+                ))
+              ) : (
+                <Typography color="text.secondary">
+                  No chat history yet for this patient.
+                </Typography>
+              )}
+            </Stack>
+
+            {aiError && (
+              <Typography color="error" variant="body2" sx={{ mb: 1 }}>
+                {aiError}
+              </Typography>
+            )}
+
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <TextField
+                fullWidth
+                placeholder="Ask AI about this patient..."
+                value={aiQuestion}
+                onChange={(e) => setAiQuestion(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && aiQuestion.trim()) {
+                    askAiMutation.mutate(aiQuestion.trim());
+                  }
+                }}
+              />
+              <Button
+                variant="contained"
+                disabled={!aiQuestion.trim() || askAiMutation.isPending}
+                isLoading={askAiMutation.isPending}
+                onClick={() => askAiMutation.mutate(aiQuestion.trim())}
+              >
+                Ask AI
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
 
       <EditPatientModal
         open={isEditOpen}
