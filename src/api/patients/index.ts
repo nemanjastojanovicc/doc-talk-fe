@@ -63,12 +63,14 @@ const buildPatientPayload = (
       : undefined;
 
   return {
-    firstName: payload.firstName,
-    lastName: payload.lastName,
+    firstName: payload.firstName?.trim() || null,
+    lastName: payload.lastName?.trim() || null,
     dateOfBirth: payload.dateOfBirth,
     gender: payload.gender,
     vitals,
     lifestyle,
+    email: payload.email?.trim() || null,
+    phoneNumber: payload.phoneNumber?.trim() || null,
   };
 };
 
