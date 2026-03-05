@@ -5,6 +5,43 @@ export const basicPatientsPath = (routePath = '') =>
   `patients${routePath && '/'}${routePath}`;
 
 export const myPatientPath = () => basicPatientsPath('me');
+export const myPatientAiChatPath = () => basicPatientsPath('me/ai-chat');
+export const myPatientAiChatHistoryPath = () => basicPatientsPath('me/ai-chat-history');
+export const myPatientAiChatSummaryPath = () => basicPatientsPath('me/ai-chat-summary');
+export const doctorNotificationsPath = () => 'doctor/notifications';
+export const patientAiChatHistoryPath = (patientId: string) =>
+  basicPatientsPath(`${patientId}/ai-chat-history`);
+
+export type PatientAiChatMessage = {
+  id: string;
+  patientId: string;
+  accountId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+};
+
+export type PatientAiChatSummary = {
+  summary: string;
+  keyPoints: string[];
+  warningSignals: string[];
+  suggestedDoctorTopics: string[];
+};
+
+export type DoctorNotification = {
+  id: string;
+  patientId: string;
+  doctorAccountId: string;
+  sourceMessage: string;
+  aiReason: string;
+  status: 'new' | 'added_to_chart' | 'dismissed';
+  createdAt: string;
+  updatedAt: string;
+  patient?: {
+    id: string;
+    fullName: string;
+  };
+};
 
 export async function getPatients() {
   const { data } = await httpClient.get<Patient[]>(basicPatientsPath());
@@ -18,6 +55,43 @@ export async function getPatient(patientId: string) {
 
 export async function getMyPatient() {
   const { data } = await httpClient.get<Patient>(myPatientPath());
+  return data;
+}
+
+export async function askMyPatientAi(question: string) {
+  const { data } = await httpClient.post<{ answer: string }>(myPatientAiChatPath(), {
+    question,
+  });
+  return data;
+}
+
+export async function getMyPatientAiChatHistory() {
+  const { data } = await httpClient.get<PatientAiChatMessage[]>(myPatientAiChatHistoryPath());
+  return data;
+}
+
+export async function getPatientAiChatHistory(patientId: string) {
+  const { data } = await httpClient.get<PatientAiChatMessage[]>(
+    patientAiChatHistoryPath(patientId),
+  );
+  return data;
+}
+
+export async function getMyPatientAiChatSummary() {
+  const { data } = await httpClient.post<PatientAiChatSummary>(myPatientAiChatSummaryPath());
+  return data;
+}
+
+export async function getDoctorNotifications() {
+  const { data } = await httpClient.get<DoctorNotification[]>(doctorNotificationsPath());
+  return data;
+}
+
+export async function reviewDoctorNotification(notificationId: string, addToChart: boolean) {
+  const { data } = await httpClient.post<DoctorNotification>(
+    `${doctorNotificationsPath()}/${notificationId}/review`,
+    { addToChart },
+  );
   return data;
 }
 
@@ -39,6 +113,22 @@ export type CreatePatientPayload = {
 
 export type UpdatePatientPayload = Partial<CreatePatientPayload>;
 
+type UpdateMedicalRecordPayload = {
+  chronicConditions?: string[];
+  allergies?: string[];
+  diagnosesHistory?: string[];
+  patientReportedInfo?: string[];
+  medications?: Array<{
+    name: string;
+    dosage: string;
+    frequency: string;
+  }>;
+};
+
+export type ExtendedUpdatePatientPayload = UpdatePatientPayload & {
+  medicalRecord?: UpdateMedicalRecordPayload;
+};
+
 const toNumberOrNull = (value?: string) => {
   if (value === undefined) return undefined;
   if (value.trim() === '') return null;
@@ -47,7 +137,7 @@ const toNumberOrNull = (value?: string) => {
 };
 
 const buildPatientPayload = (
-  payload: CreatePatientPayload | UpdatePatientPayload,
+  payload: CreatePatientPayload | ExtendedUpdatePatientPayload,
 ) => {
   const vitals =
     payload.heightCm !== undefined ||
@@ -80,6 +170,7 @@ const buildPatientPayload = (
     patientPassword: payload.patientPassword?.trim() || undefined,
     vitals,
     lifestyle,
+    medicalRecord: payload.medicalRecord,
   };
 };
 
@@ -93,7 +184,7 @@ export async function createPatient(payload: CreatePatientPayload) {
 
 export async function updatePatient(
   patientId: string,
-  payload: UpdatePatientPayload,
+  payload: ExtendedUpdatePatientPayload,
 ) {
   const { data } = await httpClient.put<Patient>(
     basicPatientsPath(patientId),

@@ -32,6 +32,10 @@ export type EditPatientForm = {
   smoking: NonNullable<Patient['lifestyle']>['smoking'] | '';
   alcohol: NonNullable<Patient['lifestyle']>['alcohol'] | '';
   stressLevel: string;
+  chronicConditions: string;
+  allergies: string;
+  diagnosesHistory: string;
+  patientReportedInfo: string;
 };
 
 type Props = {
@@ -66,6 +70,10 @@ const mapPatientToForm = (patient: Patient): EditPatientForm => ({
     patient.lifestyle?.stressLevel !== undefined
       ? String(patient.lifestyle.stressLevel)
       : '',
+  chronicConditions: patient.medicalRecord?.chronicConditions?.join('\n') ?? '',
+  allergies: patient.medicalRecord?.allergies?.join('\n') ?? '',
+  diagnosesHistory: patient.medicalRecord?.diagnosesHistory?.join('\n') ?? '',
+  patientReportedInfo: patient.medicalRecord?.patientReportedInfo?.join('\n') ?? '',
 });
 
 const normalizeSingleDigit = (value: string) =>
@@ -313,6 +321,63 @@ const EditPatientModal: React.FC<Props> = ({
               <MenuItem value="frequent">Frequent</MenuItem>
             </TextField>
           </Stack>
+
+          <TextField
+            label="Chronic conditions (one per line)"
+            value={form.chronicConditions}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                chronicConditions: e.target.value,
+              }))
+            }
+            fullWidth
+            multiline
+            minRows={2}
+          />
+
+          <TextField
+            label="Allergies (one per line)"
+            value={form.allergies}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                allergies: e.target.value,
+              }))
+            }
+            fullWidth
+            multiline
+            minRows={2}
+          />
+
+          <TextField
+            label="Diagnoses history (one per line)"
+            value={form.diagnosesHistory}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                diagnosesHistory: e.target.value,
+              }))
+            }
+            fullWidth
+            multiline
+            minRows={3}
+          />
+
+          <TextField
+            label="Patient-reported info (one per line)"
+            value={form.patientReportedInfo}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                patientReportedInfo: e.target.value,
+              }))
+            }
+            fullWidth
+            multiline
+            minRows={3}
+          />
+
         </Stack>
       </DialogContent>
       <DialogActions>

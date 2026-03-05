@@ -14,8 +14,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session, create_engine, select, SQLModel
 
-from models import Patient, Consultation, User, Account
-from ai_engine import transcribe_audio, analyze_medical_transcript
+from models import (
+    Patient,
+    Consultation,
+    User,
+    Account,
+    PatientAiChatMessage,
+    DoctorNotification,
+)
+from ai_engine import (
+    transcribe_audio,
+    analyze_medical_transcript,
+    ask_patient_self_service,
+    summarize_patient_chat,
+    detect_significant_patient_info,
+)
 from migrations import run_migrations
 
 # --- DATABASE SETUP ---
@@ -51,6 +64,7 @@ def build_medical_record(raw: Any) -> Dict[str, Any]:
         "allergies": ensure_list(raw.get("allergies")),
         "medications": ensure_list(raw.get("medications")),
         "diagnosesHistory": ensure_list(raw.get("diagnosesHistory")),
+        "patientReportedInfo": ensure_list(raw.get("patientReportedInfo")),
     }
 
 
@@ -75,6 +89,36 @@ def _safe_text(value: Any) -> str:
         return json.dumps(value, ensure_ascii=False)
     except Exception:
         return str(value)
+
+
+def _is_significant_patient_message(message: str) -> bool:
+    text = message.lower()
+    keywords = [
+        "faint",
+        "fainted",
+        "passed out",
+        "seizure",
+        "convulsion",
+        "chest pain",
+        "shortness of breath",
+        "can't breathe",
+        "numb",
+        "weakness",
+        "paralysis",
+        "slurred speech",
+        "confusion",
+        "worst headache",
+        "vomiting blood",
+        "blood in stool",
+        "high fever",
+        "suicidal",
+        "loss of consciousness",
+        "onesvest",
+        "onesvestio",
+        "nesvestica",
+        "gubitak svesti",
+    ]
+    return any(keyword in text for keyword in keywords)
 
 
 def _extract_diagnoses(ai_soap: Any, recommendations: List[str]) -> List[str]:
@@ -402,6 +446,15 @@ class PatientLifestyle(BaseModel):
     diet: str | None = None
     stressLevel: int | None = None
 
+
+class PatientMedicalRecord(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    chronicConditions: List[str] = []
+    allergies: List[str] = []
+    medications: List[Dict[str, Any]] = []
+    diagnosesHistory: List[str] = []
+    patientReportedInfo: List[str] = []
+
 class PatientCreate(BaseModel):
     model_config = ConfigDict(extra="ignore")
     firstName: str
@@ -425,6 +478,7 @@ class PatientUpdate(BaseModel):
     phoneNumber: str | None = None
     vitals: PatientVitals | None = None
     lifestyle: PatientLifestyle | None = None
+    medicalRecord: PatientMedicalRecord | None = None
 
 
 class SignupPayload(BaseModel):
@@ -439,6 +493,16 @@ class LoginPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     email: str
     password: str
+
+
+class PatientAiQuestionPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    question: str
+
+
+class DoctorNotificationReviewPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    addToChart: bool = False
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -639,6 +703,278 @@ def get_my_patient(
 
     return serialize_patient(patient)
 
+
+def serialize_patient_ai_chat_message(message: PatientAiChatMessage) -> Dict[str, Any]:
+    return {
+        "id": message.id,
+        "patientId": message.patientId,
+        "accountId": message.accountId,
+        "role": message.role,
+        "content": message.content,
+        "createdAt": message.createdAt,
+    }
+
+
+def serialize_doctor_notification(
+    notification: DoctorNotification,
+    patient: Patient | None = None,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "id": notification.id,
+        "patientId": notification.patientId,
+        "doctorAccountId": notification.doctorAccountId,
+        "sourceMessage": notification.sourceMessage,
+        "aiReason": notification.aiReason,
+        "status": notification.status,
+        "createdAt": notification.createdAt,
+        "updatedAt": notification.updatedAt,
+    }
+    if patient:
+        payload["patient"] = {
+            "id": patient.id,
+            "fullName": f"{patient.firstName} {patient.lastName}",
+        }
+    return payload
+
+
+@app.get("/patients/me/ai-chat-history")
+def get_my_ai_chat_history(
+    authorization: str | None = Header(default=None),
+    session: Session = Depends(get_session),
+):
+    account = get_account_by_access_token(authorization, session)
+    if account.role != "patient":
+        raise HTTPException(status_code=403, detail="Only patient accounts are allowed")
+
+    patient = session.exec(
+        select(Patient).where(Patient.patientAccountId == account.id)
+    ).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient record not found")
+
+    messages = session.exec(
+        select(PatientAiChatMessage)
+        .where(PatientAiChatMessage.patientId == patient.id)
+        .order_by(PatientAiChatMessage.createdAt.asc())
+    ).all()
+
+    return [serialize_patient_ai_chat_message(message) for message in messages]
+
+
+@app.get("/patients/{patient_id}/ai-chat-history")
+def get_patient_ai_chat_history(
+    patient_id: str,
+    session: Session = Depends(get_session),
+):
+    patient = session.get(Patient, patient_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    messages = session.exec(
+        select(PatientAiChatMessage)
+        .where(PatientAiChatMessage.patientId == patient.id)
+        .order_by(PatientAiChatMessage.createdAt.asc())
+    ).all()
+
+    return [serialize_patient_ai_chat_message(message) for message in messages]
+
+
+@app.post("/patients/me/ai-chat")
+def patient_self_ai_chat(
+    payload: PatientAiQuestionPayload,
+    authorization: str | None = Header(default=None),
+    session: Session = Depends(get_session),
+):
+    account = get_account_by_access_token(authorization, session)
+    if account.role != "patient":
+        raise HTTPException(status_code=403, detail="Only patient accounts are allowed")
+
+    patient = session.exec(
+        select(Patient).where(Patient.patientAccountId == account.id)
+    ).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient record not found")
+
+    question = payload.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Question is required")
+
+    recent_consultations = session.exec(
+        select(Consultation)
+        .where(Consultation.patientId == patient.id)
+        .order_by(Consultation.date.desc())
+    ).all()[:5]
+
+    context = {
+        "patient": build_patient_payload(patient),
+        "recentConsultations": [
+            {
+                "date": c.date,
+                "doctorNotes": c.doctorNotes,
+                "aiSummary": c.aiSummary,
+                "aiRecommendations": ensure_list(parse_json_value(c.aiRecommendations, [])),
+            }
+            for c in recent_consultations
+        ],
+    }
+
+    answer = ask_patient_self_service(
+        patient_context=context,
+        question=question,
+    )
+
+    now = datetime.now().isoformat()
+    user_message = PatientAiChatMessage(
+        patientId=patient.id,
+        accountId=account.id,
+        role="user",
+        content=question,
+        createdAt=now,
+    )
+    ai_message = PatientAiChatMessage(
+        patientId=patient.id,
+        accountId=account.id,
+        role="assistant",
+        content=answer,
+        createdAt=datetime.now().isoformat(),
+    )
+    session.add(user_message)
+    session.add(ai_message)
+
+    significance = detect_significant_patient_info(question, answer)
+    assigned_doctor_ids = ensure_list(parse_json_value(patient.assignedDoctorIds, []))
+
+    should_notify = bool(significance.get("shouldNotify")) or _is_significant_patient_message(question)
+
+    if should_notify and assigned_doctor_ids:
+        reason = _safe_text(significance.get("reason")).strip() or "Potential significant new patient-reported information"
+        for doctor_account_id in assigned_doctor_ids:
+            existing_notification = session.exec(
+                select(DoctorNotification).where(
+                    DoctorNotification.patientId == patient.id,
+                    DoctorNotification.doctorAccountId == str(doctor_account_id),
+                    DoctorNotification.sourceMessage == question,
+                )
+            ).first()
+            if existing_notification:
+                continue
+
+            notification = DoctorNotification(
+                patientId=patient.id,
+                doctorAccountId=str(doctor_account_id),
+                sourceMessage=question,
+                aiReason=reason,
+                status="new",
+                createdAt=datetime.now().isoformat(),
+                updatedAt=datetime.now().isoformat(),
+            )
+            session.add(notification)
+
+    session.commit()
+
+    return {"answer": answer}
+
+
+@app.post("/patients/me/ai-chat-summary")
+def patient_ai_chat_summary(
+    authorization: str | None = Header(default=None),
+    session: Session = Depends(get_session),
+):
+    account = get_account_by_access_token(authorization, session)
+    if account.role != "patient":
+        raise HTTPException(status_code=403, detail="Only patient accounts are allowed")
+
+    patient = session.exec(
+        select(Patient).where(Patient.patientAccountId == account.id)
+    ).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient record not found")
+
+    messages = session.exec(
+        select(PatientAiChatMessage)
+        .where(PatientAiChatMessage.patientId == patient.id)
+        .order_by(PatientAiChatMessage.createdAt.asc())
+    ).all()
+
+    simplified_messages = [
+        {"role": message.role, "content": message.content}
+        for message in messages
+    ]
+
+    summary = summarize_patient_chat(simplified_messages)
+    return summary
+
+
+@app.get("/doctor/notifications")
+def get_doctor_notifications(
+    authorization: str | None = Header(default=None),
+    session: Session = Depends(get_session),
+):
+    account = get_account_by_access_token(authorization, session)
+    if account.role != "doctor":
+        raise HTTPException(status_code=403, detail="Only doctor accounts are allowed")
+
+    notifications = session.exec(
+        select(DoctorNotification)
+        .where(DoctorNotification.doctorAccountId == account.id)
+        .order_by(DoctorNotification.createdAt.desc())
+    ).all()
+
+    patients_map: Dict[str, Patient] = {}
+    patient_ids = {notification.patientId for notification in notifications}
+    if patient_ids:
+        patients = session.exec(select(Patient).where(Patient.id.in_(patient_ids))).all()
+        patients_map = {patient.id: patient for patient in patients}
+
+    return [
+        serialize_doctor_notification(notification, patients_map.get(notification.patientId))
+        for notification in notifications
+    ]
+
+
+@app.post("/doctor/notifications/{notification_id}/review")
+def review_doctor_notification(
+    notification_id: str,
+    payload: DoctorNotificationReviewPayload,
+    authorization: str | None = Header(default=None),
+    session: Session = Depends(get_session),
+):
+    account = get_account_by_access_token(authorization, session)
+    if account.role != "doctor":
+        raise HTTPException(status_code=403, detail="Only doctor accounts are allowed")
+
+    notification = session.get(DoctorNotification, notification_id)
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    if notification.doctorAccountId != account.id:
+        raise HTTPException(status_code=403, detail="You are not allowed to review this notification")
+
+    patient = session.get(Patient, notification.patientId)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    if payload.addToChart:
+        medical_record = build_medical_record(parse_json_value(patient.medicalRecord, {}))
+        current_items = ensure_list(medical_record.get("patientReportedInfo"))
+        current_items.append(notification.sourceMessage)
+        medical_record["patientReportedInfo"] = _deduplicate_preserve_order(
+            [_safe_text(item) for item in current_items if _safe_text(item).strip()]
+        )
+        patient.medicalRecord = json.dumps(medical_record)
+        patient.updatedAt = datetime.now().isoformat()
+        notification.status = "added_to_chart"
+    else:
+        notification.status = "dismissed"
+
+    notification.updatedAt = datetime.now().isoformat()
+
+    session.add(patient)
+    session.add(notification)
+    session.commit()
+    session.refresh(notification)
+
+    return serialize_doctor_notification(notification, patient)
+
 @app.get("/patients")
 def get_patients(session: Session = Depends(get_session)):
     patients = session.exec(select(Patient)).all()
@@ -786,6 +1122,9 @@ def update_patient(
     if "lifestyle" in updates:
         lifestyle = updates["lifestyle"] or {}
         patient.lifestyle = json.dumps(lifestyle)
+    if "medicalRecord" in updates:
+        medical_record = updates["medicalRecord"] or {}
+        patient.medicalRecord = json.dumps(build_medical_record(medical_record))
     
     # Update the timestamp
     patient.updatedAt = datetime.now().isoformat()

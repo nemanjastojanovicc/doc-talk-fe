@@ -73,3 +73,23 @@ class Consultation(SQLModel, table=True):
 
     # Link back to patient
     patient: Optional[Patient] = Relationship(back_populates="consultations")
+
+
+class PatientAiChatMessage(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    patientId: str = Field(index=True)
+    accountId: str = Field(index=True)
+    role: str
+    content: str
+    createdAt: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class DoctorNotification(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    patientId: str = Field(index=True)
+    doctorAccountId: str = Field(index=True)
+    sourceMessage: str
+    aiReason: str
+    status: str = "new"
+    createdAt: str = Field(default_factory=lambda: datetime.now().isoformat())
+    updatedAt: str = Field(default_factory=lambda: datetime.now().isoformat())
