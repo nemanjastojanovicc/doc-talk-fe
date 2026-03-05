@@ -14,7 +14,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session, create_engine, select, SQLModel
 
-# Import your custom logic
 from models import Patient, Consultation, User, Account
 from ai_engine import transcribe_audio, analyze_medical_transcript
 from migrations import run_migrations
