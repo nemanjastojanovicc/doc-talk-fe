@@ -473,7 +473,7 @@ const PatientDetailsPage = () => {
 
       <BasicSpeechRecorder
         patientId={patient.id}
-        onUploaded={() => {}}
+        onUploaded={() => undefined}
       />
 
       <EditPatientModal
