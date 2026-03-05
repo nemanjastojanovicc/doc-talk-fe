@@ -20,6 +20,7 @@ export type MedicalRecord = {
   allergies: string[];
   medications: Medication[];
   diagnosesHistory: string[];
+  patientReportedInfo?: string[];
 };
 
 export type Vitals = {

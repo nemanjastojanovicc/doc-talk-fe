@@ -17,6 +17,7 @@ import PsychologyIcon from '@mui/icons-material/Psychology';
 
 import { Patient } from 'models/Patient';
 import { needsAttention } from './Home.page';
+import { formatAiSummary } from 'pages/Patient/utils';
 
 type Props = {
   patients: Patient[];
@@ -52,6 +53,13 @@ const PatientCardList = ({ patients }: Props) => {
       {patients.map((patient) => {
         const age = calculateAge(patient.dateOfBirth);
         const attention = needsAttention(patient);
+        const latestConsultation = [...(patient.consultations ?? [])].sort((a, b) =>
+          (b.date || '').localeCompare(a.date || ''),
+        )[0];
+        const latestAiSummary = latestConsultation?.aiSummary
+          ? formatAiSummary(latestConsultation.aiSummary)
+          : '';
+        const reportedInfo = patient.medicalRecord.patientReportedInfo ?? [];
 
         return (
           <Card
@@ -141,6 +149,34 @@ const PatientCardList = ({ patients }: Props) => {
                 ) : (
                   <Typography variant="body2" color="text.secondary">
                     No active therapy
+                  </Typography>
+                )}
+
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="subtitle2">Patient info</Typography>
+                </Stack>
+
+                {reportedInfo.length ? (
+                  <Typography variant="body2" color="text.secondary">
+                    {reportedInfo[reportedInfo.length - 1]}
+                  </Typography>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    No patient-reported info
+                  </Typography>
+                )}
+
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="subtitle2">Latest AI summary</Typography>
+                </Stack>
+
+                {latestAiSummary ? (
+                  <Typography variant="body2" color="text.secondary">
+                    {latestAiSummary}
+                  </Typography>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    No AI summary yet
                   </Typography>
                 )}
               </Stack>

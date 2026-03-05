@@ -7,6 +7,7 @@ import {
   Chip,
   Divider,
   Stack,
+  TextField,
 } from '@mui/material';
 import { Button } from 'components';
 import BasicSpeechRecorder from 'components/BasicSpeechRecorder';
@@ -14,13 +15,27 @@ import { needsAttention } from 'pages/Home/Home.page';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { API_PATHS } from 'api';
-import { getPatient, updatePatient } from 'api/patients';
+import {
+  doctorNotificationsPath,
+  getDoctorNotifications,
+  getPatientAiChatHistory,
+  patientAiChatHistoryPath,
+  getPatient,
+  reviewDoctorNotification,
+  updatePatient,
+} from 'api/patients';
 import { getConsultationHistory } from 'api/consultations';
 import { Patient } from 'models/Patient';
 import EditPatientModal from './EditPatientModal';
 import type { EditPatientForm } from './EditPatientModal';
 import { calculateAge, formatAiSummary } from './utils';
 import utils from 'utils';
+
+const splitLines = (value: string) =>
+  value
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean);
 
 const PatientDetailsPage = () => {
   const { id } = useParams();
@@ -29,6 +44,10 @@ const PatientDetailsPage = () => {
   const queryClient = useQueryClient();
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [medicationName, setMedicationName] = useState('');
+  const [medicationDosage, setMedicationDosage] = useState('');
+  const [medicationWayOfUse, setMedicationWayOfUse] = useState('');
+  const [medicationError, setMedicationError] = useState<string | null>(null);
 
   const { data: patient } = useQuery({
     queryKey: [API_PATHS.patients.basicPatientsPath(id ?? '')],
@@ -42,10 +61,31 @@ const PatientDetailsPage = () => {
     enabled: Boolean(id),
   });
 
+  const { data: doctorNotifications = [] } = useQuery({
+    queryKey: [doctorNotificationsPath()],
+    queryFn: getDoctorNotifications,
+  });
+
+  const { data: patientChatMessages = [] } = useQuery({
+    queryKey: [patientAiChatHistoryPath(id ?? '')],
+    queryFn: () => getPatientAiChatHistory(id ?? ''),
+    enabled: Boolean(id),
+  });
+
   const patientId = patient?.id ?? '';
 
   const updatePatientMutation = useMutation({
-    mutationFn: (payload: EditPatientForm) => updatePatient(patientId, payload),
+    mutationFn: (payload: EditPatientForm) =>
+      updatePatient(patientId, {
+        ...payload,
+        medicalRecord: {
+          chronicConditions: splitLines(payload.chronicConditions),
+          allergies: splitLines(payload.allergies),
+          diagnosesHistory: splitLines(payload.diagnosesHistory),
+          patientReportedInfo: splitLines(payload.patientReportedInfo),
+          medications: patient.medicalRecord.medications,
+        },
+      }),
     onSuccess: (updatedPatient) => {
       queryClient.setQueryData(
         [API_PATHS.patients.basicPatientsPath(updatedPatient.id)],
@@ -65,11 +105,92 @@ const PatientDetailsPage = () => {
     },
   });
 
+  const addMedicationMutation = useMutation({
+    mutationFn: (nextMedication: {
+      name: string;
+      dosage: string;
+      frequency: string;
+    }) =>
+      updatePatient(patientId, {
+        medicalRecord: {
+          chronicConditions: patient.medicalRecord.chronicConditions,
+          allergies: patient.medicalRecord.allergies,
+          diagnosesHistory: patient.medicalRecord.diagnosesHistory,
+          patientReportedInfo: patient.medicalRecord.patientReportedInfo ?? [],
+          medications: [...patient.medicalRecord.medications, nextMedication],
+        },
+      }),
+    onSuccess: (updatedPatient) => {
+      queryClient.setQueryData(
+        [API_PATHS.patients.basicPatientsPath(updatedPatient.id)],
+        updatedPatient,
+      );
+      queryClient.setQueryData<Patient[]>(
+        [API_PATHS.patients.basicPatientsPath()],
+        (prev = []) =>
+          prev.length
+            ? prev.map((p) => (p.id === updatedPatient.id ? updatedPatient : p))
+            : [updatedPatient],
+      );
+      setMedicationName('');
+      setMedicationDosage('');
+      setMedicationWayOfUse('');
+      setMedicationError(null);
+    },
+    onError: (error: any) => {
+      setMedicationError(error?.detail ?? error?.message ?? 'Medication save failed');
+    },
+  });
+
+  const reviewNotificationMutation = useMutation({
+    mutationFn: ({ notificationId, addToChart }: { notificationId: string; addToChart: boolean }) =>
+      reviewDoctorNotification(notificationId, addToChart),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [doctorNotificationsPath()] });
+      queryClient.invalidateQueries({
+        queryKey: [API_PATHS.patients.basicPatientsPath(id ?? '')],
+      });
+    },
+  });
+
   if (!patient) return null;
 
   const age = calculateAge(patient.dateOfBirth);
   const attention = needsAttention(patient);
   const consultations = historyData ?? patient.consultations ?? [];
+  const patientNotifications = doctorNotifications.filter(
+    (notification) => notification.patientId === patient.id,
+  );
+  const actionableNotifications = patientNotifications.filter(
+    (notification) => notification.status === 'new',
+  );
+
+  const patientUpdatedInfo = Array.from(
+    new Set([
+      ...(patient.medicalRecord.patientReportedInfo ?? []),
+      ...patientNotifications
+        .filter((notification) => notification.status !== 'dismissed')
+        .map((notification) => notification.sourceMessage.trim())
+        .filter(Boolean),
+      ...patientChatMessages
+        .filter((message) => message.role === 'user')
+        .map((message) => message.content.trim())
+        .filter(Boolean),
+    ]),
+  );
+
+  const handleAddMedication = () => {
+    const name = medicationName.trim();
+    const dosage = medicationDosage.trim();
+    const frequency = medicationWayOfUse.trim();
+
+    if (!name || !dosage || !frequency || addMedicationMutation.isPending) {
+      setMedicationError('Please fill medication, dosage and way of use');
+      return;
+    }
+
+    addMedicationMutation.mutate({ name, dosage, frequency });
+  };
 
   return (
     <Box
@@ -212,6 +333,43 @@ const PatientDetailsPage = () => {
             ) : (
               <Typography color="text.secondary">No active therapy</Typography>
             )}
+
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Add medication
+            </Typography>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+              <TextField
+                label="Medication"
+                value={medicationName}
+                onChange={(e) => setMedicationName(e.target.value)}
+                fullWidth
+              />
+              <TextField
+                label="Dosage"
+                value={medicationDosage}
+                onChange={(e) => setMedicationDosage(e.target.value)}
+                fullWidth
+              />
+              <TextField
+                label="Way of use"
+                value={medicationWayOfUse}
+                onChange={(e) => setMedicationWayOfUse(e.target.value)}
+                fullWidth
+              />
+              <Button
+                variant="contained"
+                onClick={handleAddMedication}
+                disabled={addMedicationMutation.isPending}
+              >
+                Add
+              </Button>
+            </Stack>
+            {medicationError && (
+              <Typography color="error" variant="body2" sx={{ mt: 1 }}>
+                {medicationError}
+              </Typography>
+            )}
           </CardContent>
         </Card>
 
@@ -237,13 +395,85 @@ const PatientDetailsPage = () => {
             </Stack>
           </CardContent>
         </Card>
+
+        <Card sx={{ gridColumn: '1 / -1' }}>
+          <CardContent>
+            <Typography variant="h6">Information updated from the patient</Typography>
+            <Divider sx={{ my: 1 }} />
+            {patientUpdatedInfo.length ? (
+              <Stack spacing={1}>
+                {patientUpdatedInfo.map((entry) => (
+                  <Typography key={entry} variant="body2">
+                    • {entry}
+                  </Typography>
+                ))}
+              </Stack>
+            ) : (
+              <Typography color="text.secondary">
+                No patient-reported info recorded
+              </Typography>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card sx={{ gridColumn: '1 / -1' }}>
+          <CardContent>
+            <Typography variant="h6">AI detected significant patient info</Typography>
+            <Divider sx={{ my: 1 }} />
+            {actionableNotifications.length ? (
+              <Stack spacing={1.5}>
+                {actionableNotifications.map((notification) => (
+                  <Box key={notification.id} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 1.25 }}>
+                    <Typography variant="body2" fontWeight={600}>
+                      {notification.patient?.fullName ?? `${patient.firstName} ${patient.lastName}`}
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 0.5 }}>
+                      “{notification.sourceMessage}”
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      AI reason: {notification.aiReason}
+                    </Typography>
+                    <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        onClick={() =>
+                          reviewNotificationMutation.mutate({
+                            notificationId: notification.id,
+                            addToChart: true,
+                          })
+                        }
+                        disabled={reviewNotificationMutation.isPending}
+                      >
+                        Add to chart
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() =>
+                          reviewNotificationMutation.mutate({
+                            notificationId: notification.id,
+                            addToChart: false,
+                          })
+                        }
+                        disabled={reviewNotificationMutation.isPending}
+                      >
+                        Dismiss
+                      </Button>
+                    </Stack>
+                  </Box>
+                ))}
+              </Stack>
+            ) : (
+              <Typography color="text.secondary">No new AI notifications for this patient</Typography>
+            )}
+          </CardContent>
+        </Card>
       </Box>
 
       <BasicSpeechRecorder
         patientId={patient.id}
-        onUploaded={(res) => {
-          console.log(res);
-        }}
+        onUploaded={() => undefined}
       />
 
       <EditPatientModal
