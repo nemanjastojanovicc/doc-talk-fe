@@ -31,8 +31,6 @@ const ConsultationDetailsPage = () => {
     enabled: Boolean(consultationId),
   });
 
-  console.log({ consultation });
-
   if (!consultation) return <></>;
 
   return (

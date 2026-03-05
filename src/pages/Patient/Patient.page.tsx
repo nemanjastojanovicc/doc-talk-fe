@@ -37,20 +37,6 @@ const splitLines = (value: string) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
-const parseMedications = (value: string) =>
-  value
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [name, dosage, frequency] = line.split('|').map((part) => part.trim());
-      return {
-        name: name || 'Medication',
-        dosage: dosage || 'as advised',
-        frequency: frequency || 'as prescribed',
-      };
-    });
-
 const PatientDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -487,9 +473,7 @@ const PatientDetailsPage = () => {
 
       <BasicSpeechRecorder
         patientId={patient.id}
-        onUploaded={(res) => {
-          console.log(res);
-        }}
+        onUploaded={() => {}}
       />
 
       <EditPatientModal
