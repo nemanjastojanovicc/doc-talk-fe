@@ -1,31 +1,41 @@
-import whisper
 import os
 import ollama
 import json
 import re
 from typing import Any, Dict, List
+from huggingface_hub import InferenceClient
 
-print("Loading Whisper Model (this may take a moment)...")
-whisper_model = whisper.load_model("base")
+# HuggingFace API setup
+HF_TOKEN = os.environ.get("HF_TOKEN", "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")
+hf_client = InferenceClient(token=HF_TOKEN)
+
+print("Using HuggingFace Whisper API for transcription...")
 
 OLLAMA_MODEL = "gemma:7b" 
-
-# --- CORE FUNCTIONS ---
 
 def transcribe_audio(file_path: str) -> str:
     """
     Takes a path to an audio file (.wav, .mp3, etc.) and 
-    returns the transcribed text as a string.
+    returns the transcribed text using HuggingFace Whisper API.
     """
     try:
         if not os.path.exists(file_path):
             return f"Error: File not found at {file_path}"
 
-        print(f"👂 Transcribing file: {file_path}")
+        print(f"👂 Transcribing file via HuggingFace: {file_path}")
         
-        result = whisper_model.transcribe(file_path)
+        with open(file_path, "rb") as audio_file:
+            audio_data = audio_file.read()
         
-        return result.get("text", "").strip()
+        result = hf_client.automatic_speech_recognition(
+            audio_data,
+            model="openai/whisper-large-v3"
+        )
+        
+        # Handle both dict and string responses
+        if isinstance(result, dict):
+            return result.get("text", "").strip()
+        return str(result).strip()
         
     except Exception as e:
         print(f"Transcription Error: {str(e)}")
@@ -76,7 +86,6 @@ def analyze_medical_transcript(transcript_text: str):
             "recommendations": ["Check Ollama connection", "Ensure gemma:7b is pulled"]
         }
 
-
 def ask_patient_self_service(
     *,
     patient_context: dict,
@@ -123,7 +132,6 @@ def ask_patient_self_service(
         print(f"Error during patient chat: {str(e)}")
         return "AI assistant is currently unavailable. Please try again shortly."
 
-
 def summarize_patient_chat(messages: List[Dict[str, str]]) -> Dict[str, Any]:
     transcript = "\n".join(
         [f"{m.get('role', 'unknown').upper()}: {m.get('content', '')}" for m in messages]
@@ -161,7 +169,6 @@ def summarize_patient_chat(messages: List[Dict[str, str]]) -> Dict[str, Any]:
             "warningSignals": [],
             "suggestedDoctorTopics": [],
         }
-
 
 def detect_significant_patient_info(patient_message: str, ai_answer: str) -> Dict[str, Any]:
     system_instruction = (
