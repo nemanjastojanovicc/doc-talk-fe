@@ -1,31 +1,43 @@
-import whisper
 import os
-import ollama
 import json
 import re
 from typing import Any, Dict, List
+from huggingface_hub import InferenceClient
 
-print("Loading Whisper Model (this may take a moment)...")
-whisper_model = whisper.load_model("base")
+# HuggingFace API setup
+HF_WHISPER_TOKEN = os.environ.get("HF_WHISPER_TOKEN", "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")
+HF_GEMMA_TOKEN = os.environ.get("HF_GEMMA_TOKEN", "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")
 
-OLLAMA_MODEL = "gemma:7b" 
+whisper_client = InferenceClient(token=HF_WHISPER_TOKEN)
+gemma_client = InferenceClient(token=HF_GEMMA_TOKEN)
 
-# --- CORE FUNCTIONS ---
+print("Using HuggingFace APIs for transcription and LLM...")
+
+GEMMA_MODEL = "google/gemma-2-9b-it" 
 
 def transcribe_audio(file_path: str) -> str:
     """
     Takes a path to an audio file (.wav, .mp3, etc.) and 
-    returns the transcribed text as a string.
+    returns the transcribed text using HuggingFace Whisper API.
     """
     try:
         if not os.path.exists(file_path):
             return f"Error: File not found at {file_path}"
 
-        print(f"👂 Transcribing file: {file_path}")
+        print(f"👂 Transcribing file via HuggingFace: {file_path}")
         
-        result = whisper_model.transcribe(file_path)
+        with open(file_path, "rb") as audio_file:
+            audio_data = audio_file.read()
         
-        return result.get("text", "").strip()
+        result = whisper_client.automatic_speech_recognition(
+            audio_data,
+            model="openai/whisper-large-v3"
+        )
+        
+        # Handle both dict and string responses
+        if isinstance(result, dict):
+            return result.get("text", "").strip()
+        return str(result).strip()
         
     except Exception as e:
         print(f"Transcription Error: {str(e)}")
@@ -33,9 +45,9 @@ def transcribe_audio(file_path: str) -> str:
 
 def analyze_medical_transcript(transcript_text: str):
     """
-   Uses Ollama (Gemma:7b) to analyze a medical transcript.
+    Uses HuggingFace Gemma to analyze a medical transcript.
     """
-    print("Analyzing transcript with Llama 3...")
+    print("Analyzing transcript with Gemma via HuggingFace...")
 
     system_instruction = (
         "You are an expert medical scribe. Analyze the provided doctor-patient transcript. "
@@ -47,15 +59,16 @@ def analyze_medical_transcript(transcript_text: str):
     )
 
     try:
-        response = ollama.chat(
-            model=OLLAMA_MODEL, 
+        response = gemma_client.chat_completion(
+            model=GEMMA_MODEL,
             messages=[
                 {'role': 'system', 'content': system_instruction},
                 {'role': 'user', 'content': f"Transcript: {transcript_text}"}
-            ]
+            ],
+            max_tokens=1024
         )
 
-        raw_content = response['message']['content'].strip()
+        raw_content = response.choices[0].message.content.strip()
 
         print(f"Raw AI Output: {raw_content[:100]}...")
 
@@ -73,9 +86,8 @@ def analyze_medical_transcript(transcript_text: str):
         print(f"Error during AI analysis: {str(e)}")
         return {
             "soap_note": f"Manual Analysis: {raw_content[:300] if 'raw_content' in locals() else 'No content'}",
-            "recommendations": ["Check Ollama connection", "Ensure gemma:7b is pulled"]
+            "recommendations": ["Check HuggingFace API connection", "Verify API token"]
         }
-
 
 def ask_patient_self_service(
     *,
@@ -114,15 +126,14 @@ def ask_patient_self_service(
     ]
 
     try:
-        response = ollama.chat(model=OLLAMA_MODEL, messages=messages)
-        answer = (response.get("message", {}) or {}).get("content", "").strip()
+        response = gemma_client.chat_completion(model=GEMMA_MODEL, messages=messages, max_tokens=512)
+        answer = response.choices[0].message.content.strip() if response.choices else ""
         if not answer:
             return "I cannot find enough information in your current record to answer that."
         return answer
     except Exception as e:
         print(f"Error during patient chat: {str(e)}")
         return "AI assistant is currently unavailable. Please try again shortly."
-
 
 def summarize_patient_chat(messages: List[Dict[str, str]]) -> Dict[str, Any]:
     transcript = "\n".join(
@@ -137,14 +148,15 @@ def summarize_patient_chat(messages: List[Dict[str, str]]) -> Dict[str, Any]:
     )
 
     try:
-        response = ollama.chat(
-            model=OLLAMA_MODEL,
+        response = gemma_client.chat_completion(
+            model=GEMMA_MODEL,
             messages=[
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": f"Chat transcript:\n{transcript}"},
             ],
+            max_tokens=512
         )
-        raw = (response.get("message", {}) or {}).get("content", "").strip()
+        raw = response.choices[0].message.content.strip() if response.choices else ""
         match = re.search(r'\{.*\}', raw, re.DOTALL)
         parsed = json.loads(match.group(0)) if match else {}
         return {
@@ -162,7 +174,6 @@ def summarize_patient_chat(messages: List[Dict[str, str]]) -> Dict[str, Any]:
             "suggestedDoctorTopics": [],
         }
 
-
 def detect_significant_patient_info(patient_message: str, ai_answer: str) -> Dict[str, Any]:
     system_instruction = (
         "You detect if a patient message contains clinically significant NEW information for a doctor review. "
@@ -171,8 +182,8 @@ def detect_significant_patient_info(patient_message: str, ai_answer: str) -> Dic
     )
 
     try:
-        response = ollama.chat(
-            model=OLLAMA_MODEL,
+        response = gemma_client.chat_completion(
+            model=GEMMA_MODEL,
             messages=[
                 {"role": "system", "content": system_instruction},
                 {
@@ -183,8 +194,9 @@ def detect_significant_patient_info(patient_message: str, ai_answer: str) -> Dic
                     ),
                 },
             ],
+            max_tokens=256
         )
-        raw = (response.get("message", {}) or {}).get("content", "").strip()
+        raw = response.choices[0].message.content.strip() if response.choices else ""
         match = re.search(r'\{.*\}', raw, re.DOTALL)
         parsed = json.loads(match.group(0)) if match else {}
         return {
