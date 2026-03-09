@@ -6,11 +6,20 @@ export const basicPatientsPath = (routePath = '') =>
 
 export const myPatientPath = () => basicPatientsPath('me');
 export const myPatientAiChatPath = () => basicPatientsPath('me/ai-chat');
-export const myPatientAiChatHistoryPath = () => basicPatientsPath('me/ai-chat-history');
-export const myPatientAiChatSummaryPath = () => basicPatientsPath('me/ai-chat-summary');
+export const myPatientAiChatHistoryPath = () =>
+  basicPatientsPath('me/ai-chat-history');
+export const myPatientAiChatSummaryPath = () =>
+  basicPatientsPath('me/ai-chat-summary');
 export const doctorNotificationsPath = () => 'doctor/notifications';
 export const patientAiChatHistoryPath = (patientId: string) =>
   basicPatientsPath(`${patientId}/ai-chat-history`);
+export const patientMedicationsPath = (
+  patientId: string,
+  medicationIndex?: number,
+) =>
+  basicPatientsPath(
+    `${patientId}/medications${medicationIndex === undefined ? '' : `/${medicationIndex}`}`,
+  );
 
 export type PatientAiChatMessage = {
   id: string;
@@ -59,14 +68,19 @@ export async function getMyPatient() {
 }
 
 export async function askMyPatientAi(question: string) {
-  const { data } = await httpClient.post<{ answer: string }>(myPatientAiChatPath(), {
-    question,
-  });
+  const { data } = await httpClient.post<{ answer: string }>(
+    myPatientAiChatPath(),
+    {
+      question,
+    },
+  );
   return data;
 }
 
 export async function getMyPatientAiChatHistory() {
-  const { data } = await httpClient.get<PatientAiChatMessage[]>(myPatientAiChatHistoryPath());
+  const { data } = await httpClient.get<PatientAiChatMessage[]>(
+    myPatientAiChatHistoryPath(),
+  );
   return data;
 }
 
@@ -77,17 +91,57 @@ export async function getPatientAiChatHistory(patientId: string) {
   return data;
 }
 
+export async function addPatientMedication(
+  patientId: string,
+  payload: { name: string; dosage: string; frequency: string },
+) {
+  const { data } = await httpClient.post<Patient>(
+    patientMedicationsPath(patientId),
+    payload,
+  );
+  return data;
+}
+
+export async function updatePatientMedication(
+  patientId: string,
+  medicationIndex: number,
+  payload: { name: string; dosage: string; frequency: string },
+) {
+  const { data } = await httpClient.put<Patient>(
+    patientMedicationsPath(patientId, medicationIndex),
+    payload,
+  );
+  return data;
+}
+
+export async function removePatientMedication(
+  patientId: string,
+  medicationIndex: number,
+) {
+  const { data } = await httpClient.delete<Patient>(
+    patientMedicationsPath(patientId, medicationIndex),
+  );
+  return data;
+}
+
 export async function getMyPatientAiChatSummary() {
-  const { data } = await httpClient.post<PatientAiChatSummary>(myPatientAiChatSummaryPath());
+  const { data } = await httpClient.post<PatientAiChatSummary>(
+    myPatientAiChatSummaryPath(),
+  );
   return data;
 }
 
 export async function getDoctorNotifications() {
-  const { data } = await httpClient.get<DoctorNotification[]>(doctorNotificationsPath());
+  const { data } = await httpClient.get<DoctorNotification[]>(
+    doctorNotificationsPath(),
+  );
   return data;
 }
 
-export async function reviewDoctorNotification(notificationId: string, addToChart: boolean) {
+export async function reviewDoctorNotification(
+  notificationId: string,
+  addToChart: boolean,
+) {
   const { data } = await httpClient.post<DoctorNotification>(
     `${doctorNotificationsPath()}/${notificationId}/review`,
     { addToChart },
@@ -109,6 +163,7 @@ export type CreatePatientPayload = {
   smoking?: NonNullable<Patient['lifestyle']>['smoking'] | '';
   alcohol?: NonNullable<Patient['lifestyle']>['alcohol'] | '';
   stressLevel?: string;
+  medicalRecord?: UpdateMedicalRecordPayload;
 };
 
 export type UpdatePatientPayload = Partial<CreatePatientPayload>;
@@ -125,10 +180,6 @@ type UpdateMedicalRecordPayload = {
   }>;
 };
 
-export type ExtendedUpdatePatientPayload = UpdatePatientPayload & {
-  medicalRecord?: UpdateMedicalRecordPayload;
-};
-
 const toNumberOrNull = (value?: string) => {
   if (value === undefined) return undefined;
   if (value.trim() === '') return null;
@@ -137,7 +188,7 @@ const toNumberOrNull = (value?: string) => {
 };
 
 const buildPatientPayload = (
-  payload: CreatePatientPayload | ExtendedUpdatePatientPayload,
+  payload: CreatePatientPayload | UpdatePatientPayload,
 ) => {
   const vitals =
     payload.heightCm !== undefined ||
@@ -184,7 +235,7 @@ export async function createPatient(payload: CreatePatientPayload) {
 
 export async function updatePatient(
   patientId: string,
-  payload: ExtendedUpdatePatientPayload,
+  payload: UpdatePatientPayload,
 ) {
   const { data } = await httpClient.put<Patient>(
     basicPatientsPath(patientId),

@@ -1,43 +1,31 @@
+import whisper
 import os
+import ollama
 import json
 import re
 from typing import Any, Dict, List
-from huggingface_hub import InferenceClient
 
-# HuggingFace API setup
-HF_WHISPER_TOKEN = os.environ.get("HF_WHISPER_TOKEN", "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")
-HF_GEMMA_TOKEN = os.environ.get("HF_GEMMA_TOKEN", "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")
+print("Loading Whisper Model (this may take a moment)...")
+whisper_model = whisper.load_model("base")
 
-whisper_client = InferenceClient(token=HF_WHISPER_TOKEN)
-gemma_client = InferenceClient(token=HF_GEMMA_TOKEN)
+OLLAMA_MODEL = "gemma:7b" 
 
-print("Using HuggingFace APIs for transcription and LLM...")
-
-GEMMA_MODEL = "google/gemma-2-9b-it" 
+# --- CORE FUNCTIONS ---
 
 def transcribe_audio(file_path: str) -> str:
     """
     Takes a path to an audio file (.wav, .mp3, etc.) and 
-    returns the transcribed text using HuggingFace Whisper API.
+    returns the transcribed text as a string.
     """
     try:
         if not os.path.exists(file_path):
             return f"Error: File not found at {file_path}"
 
-        print(f"👂 Transcribing file via HuggingFace: {file_path}")
+        print(f"👂 Transcribing file: {file_path}")
         
-        with open(file_path, "rb") as audio_file:
-            audio_data = audio_file.read()
+        result = whisper_model.transcribe(file_path)
         
-        result = whisper_client.automatic_speech_recognition(
-            audio_data,
-            model="openai/whisper-large-v3"
-        )
-        
-        # Handle both dict and string responses
-        if isinstance(result, dict):
-            return result.get("text", "").strip()
-        return str(result).strip()
+        return result.get("text", "").strip()
         
     except Exception as e:
         print(f"Transcription Error: {str(e)}")
@@ -45,9 +33,9 @@ def transcribe_audio(file_path: str) -> str:
 
 def analyze_medical_transcript(transcript_text: str):
     """
-    Uses HuggingFace Gemma to analyze a medical transcript.
+   Uses Ollama (Gemma:7b) to analyze a medical transcript.
     """
-    print("Analyzing transcript with Gemma via HuggingFace...")
+    print("Analyzing transcript with Llama 3...")
 
     system_instruction = (
         "You are an expert medical scribe. Analyze the provided doctor-patient transcript. "
@@ -58,36 +46,40 @@ def analyze_medical_transcript(transcript_text: str):
         "IMPORTANT: Return ONLY raw JSON. Do not include any intro, outro, or explanations."
     )
 
-    try:
-        response = gemma_client.chat_completion(
-            model=GEMMA_MODEL,
+    def _run_ollama() -> Dict[str, Any]:
+        response = ollama.chat(
+            model=OLLAMA_MODEL,
             messages=[
                 {'role': 'system', 'content': system_instruction},
                 {'role': 'user', 'content': f"Transcript: {transcript_text}"}
-            ],
-            max_tokens=1024
+            ]
         )
 
-        raw_content = response.choices[0].message.content.strip()
-
+        raw_content = response['message']['content'].strip()
         print(f"Raw AI Output: {raw_content[:100]}...")
 
         match = re.search(r'\{.*\}', raw_content, re.DOTALL)
-        
-        if match:
-            clean_json = match.group(0)
-            analysis_data = json.loads(clean_json)
-            print("AI Analysis complete.")
-            return analysis_data
-        else:
+        if not match:
             raise ValueError("No JSON found in AI response")
 
+        clean_json = match.group(0)
+        analysis_data = json.loads(clean_json)
+        print("AI Analysis complete.")
+        return analysis_data
+
+    try:
+        return _run_ollama()
     except Exception as e:
-        print(f"Error during AI analysis: {str(e)}")
-        return {
-            "soap_note": f"Manual Analysis: {raw_content[:300] if 'raw_content' in locals() else 'No content'}",
-            "recommendations": ["Check HuggingFace API connection", "Verify API token"]
-        }
+        print(f"Error during AI analysis (attempt 1): {str(e)}")
+        try:
+            return _run_ollama()
+        except Exception as e2:
+            print(f"Error during AI analysis (attempt 2): {str(e2)}")
+            return {
+                "soap_note": f"Manual Analysis: {raw_content[:300] if 'raw_content' in locals() else 'No content'}",
+                "recommendations": ["Check Ollama connection", "Ensure gemma:7b is pulled"]
+            }
+
 
 def ask_patient_self_service(
     *,
@@ -126,14 +118,15 @@ def ask_patient_self_service(
     ]
 
     try:
-        response = gemma_client.chat_completion(model=GEMMA_MODEL, messages=messages, max_tokens=512)
-        answer = response.choices[0].message.content.strip() if response.choices else ""
+        response = ollama.chat(model=OLLAMA_MODEL, messages=messages)
+        answer = (response.get("message", {}) or {}).get("content", "").strip()
         if not answer:
             return "I cannot find enough information in your current record to answer that."
         return answer
     except Exception as e:
         print(f"Error during patient chat: {str(e)}")
         return "AI assistant is currently unavailable. Please try again shortly."
+
 
 def summarize_patient_chat(messages: List[Dict[str, str]]) -> Dict[str, Any]:
     transcript = "\n".join(
@@ -148,15 +141,14 @@ def summarize_patient_chat(messages: List[Dict[str, str]]) -> Dict[str, Any]:
     )
 
     try:
-        response = gemma_client.chat_completion(
-            model=GEMMA_MODEL,
+        response = ollama.chat(
+            model=OLLAMA_MODEL,
             messages=[
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": f"Chat transcript:\n{transcript}"},
             ],
-            max_tokens=512
         )
-        raw = response.choices[0].message.content.strip() if response.choices else ""
+        raw = (response.get("message", {}) or {}).get("content", "").strip()
         match = re.search(r'\{.*\}', raw, re.DOTALL)
         parsed = json.loads(match.group(0)) if match else {}
         return {
@@ -174,6 +166,7 @@ def summarize_patient_chat(messages: List[Dict[str, str]]) -> Dict[str, Any]:
             "suggestedDoctorTopics": [],
         }
 
+
 def detect_significant_patient_info(patient_message: str, ai_answer: str) -> Dict[str, Any]:
     system_instruction = (
         "You detect if a patient message contains clinically significant NEW information for a doctor review. "
@@ -182,8 +175,8 @@ def detect_significant_patient_info(patient_message: str, ai_answer: str) -> Dic
     )
 
     try:
-        response = gemma_client.chat_completion(
-            model=GEMMA_MODEL,
+        response = ollama.chat(
+            model=OLLAMA_MODEL,
             messages=[
                 {"role": "system", "content": system_instruction},
                 {
@@ -194,9 +187,8 @@ def detect_significant_patient_info(patient_message: str, ai_answer: str) -> Dic
                     ),
                 },
             ],
-            max_tokens=256
         )
-        raw = response.choices[0].message.content.strip() if response.choices else ""
+        raw = (response.get("message", {}) or {}).get("content", "").strip()
         match = re.search(r'\{.*\}', raw, re.DOTALL)
         parsed = json.loads(match.group(0)) if match else {}
         return {

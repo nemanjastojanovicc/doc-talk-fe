@@ -1,12 +1,3 @@
-import { useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import {
-  askMyPatientAi,
-  getMyPatient,
-  getMyPatientAiChatHistory,
-  myPatientAiChatHistoryPath,
-  myPatientPath,
-} from 'api/patients';
 import {
   Box,
   Button,
@@ -18,7 +9,16 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import {
+  askMyPatientAi,
+  getMyPatient,
+  getMyPatientAiChatHistory,
+  myPatientAiChatHistoryPath,
+  myPatientPath,
+} from 'api/patients';
 import { useAuth } from 'hooks';
+import { useState } from 'react';
 
 const PatientHomePage = () => {
   const { account } = useAuth();
@@ -35,10 +35,11 @@ const PatientHomePage = () => {
   const [question, setQuestion] = useState('');
   const [chatError, setChatError] = useState<string | null>(null);
 
-  const {
-    data: chatMessages = [],
-    refetch: refetchChatHistory,
-  } = useQuery({
+  const [optimisticMessages, setOptimisticMessages] = useState<
+    Array<{ role: 'user' | 'assistant'; content: string }>
+  >([]);
+
+  const { data: chatMessages = [], refetch: refetchChatHistory } = useQuery({
     queryKey: [myPatientAiChatHistoryPath(), account?.id],
     queryFn: getMyPatientAiChatHistory,
     enabled: Boolean(account?.id) && isPatient,
@@ -47,18 +48,27 @@ const PatientHomePage = () => {
   const askAiMutation = useMutation({
     mutationFn: (text: string) => askMyPatientAi(text),
     onSuccess: async () => {
+      setOptimisticMessages([]);
       await refetchChatHistory();
       setQuestion('');
       setChatError(null);
     },
     onError: (error: any) => {
+      setOptimisticMessages([]);
       setChatError(error?.detail ?? error?.message ?? 'AI request failed');
     },
   });
 
   const handleAskAi = () => {
     const text = question.trim();
+
     if (!text || askAiMutation.isPending) return;
+
+    setOptimisticMessages([
+      { role: 'user', content: text },
+      { role: 'assistant', content: '...' },
+    ]);
+    setQuestion('');
     askAiMutation.mutate(text);
   };
 
@@ -126,7 +136,9 @@ const PatientHomePage = () => {
               ))}
             </Stack>
           ) : (
-            <Typography color="text.secondary">No active medications</Typography>
+            <Typography color="text.secondary">
+              No active medications
+            </Typography>
           )}
         </CardContent>
       </Card>
@@ -135,25 +147,37 @@ const PatientHomePage = () => {
         <CardContent>
           <Typography variant="h6">AI Health Assistant</Typography>
           <Typography color="text.secondary" variant="body2" sx={{ mt: 0.5 }}>
-            Ask about your record or general medical explanations related to your symptoms.
+            Ask about your record or general medical explanations related to
+            your symptoms.
           </Typography>
           <Divider sx={{ my: 1.5 }} />
 
-          <Stack spacing={1.25} sx={{ maxHeight: 240, overflowY: 'auto', mb: 1.5 }}>
-            {chatMessages.length ? (
-              chatMessages.map((message, index) => (
+          <Stack
+            spacing={1.25}
+            sx={{ maxHeight: 600, overflowY: 'auto', mb: 1.5 }}
+          >
+            {chatMessages.length || optimisticMessages.length ? (
+              [...chatMessages, ...optimisticMessages].map((message, index) => (
                 <Box
                   key={`${message.role}-${index}`}
                   sx={{
-                    alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
+                    alignSelf:
+                      message.role === 'user' ? 'flex-end' : 'flex-start',
                     maxWidth: '85%',
                     px: 1.25,
                     py: 0.9,
                     borderRadius: 1.5,
-                    bgcolor: message.role === 'user' ? 'primary.light' : 'grey.100',
+                    bgcolor:
+                      message.role === 'user' ? 'primary.light' : 'grey.100',
+                    color: message.role === 'user' ? 'white' : 'black',
                   }}
                 >
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography
+                    variant="caption"
+                    color={
+                      message.role === 'user' ? 'grey.300' : 'text.secondary'
+                    }
+                  >
                     {message.role === 'user' ? 'You' : 'AI'}
                   </Typography>
                   <Typography variant="body2">{message.content}</Typography>
@@ -172,12 +196,17 @@ const PatientHomePage = () => {
             </Typography>
           )}
 
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            alignItems="center"
+            spacing={1}
+          >
             <TextField
               fullWidth
               placeholder="Ask about my medications, allergies, or illness..."
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
+              disabled={askAiMutation.isPending}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && question.trim()) {
                   handleAskAi();
@@ -188,6 +217,8 @@ const PatientHomePage = () => {
               variant="contained"
               disabled={!question.trim() || askAiMutation.isPending}
               onClick={handleAskAi}
+              sx={{ height: 56, minWidth: 100 }}
+              loading={askAiMutation.isPending}
             >
               Ask AI
             </Button>

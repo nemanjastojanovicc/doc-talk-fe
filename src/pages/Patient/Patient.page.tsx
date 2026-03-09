@@ -7,7 +7,6 @@ import {
   Chip,
   Divider,
   Stack,
-  TextField,
 } from '@mui/material';
 import { Button } from 'components';
 import BasicSpeechRecorder from 'components/BasicSpeechRecorder';
@@ -22,14 +21,24 @@ import {
   patientAiChatHistoryPath,
   getPatient,
   reviewDoctorNotification,
+  addPatientMedication,
+  updatePatientMedication,
+  removePatientMedication,
   updatePatient,
 } from 'api/patients';
 import { getConsultationHistory } from 'api/consultations';
-import { Patient } from 'models/Patient';
+import { Medication, Patient } from 'models/Patient';
 import EditPatientModal from './EditPatientModal';
 import type { EditPatientForm } from './EditPatientModal';
 import { calculateAge, formatAiSummary } from './utils';
 import utils from 'utils';
+import MedicationFormRow from './MedicationFormRow';
+
+const EMPTY_MEDICATION: Medication = {
+  name: '',
+  dosage: '',
+  frequency: '',
+};
 
 const splitLines = (value: string) =>
   value
@@ -42,12 +51,15 @@ const PatientDetailsPage = () => {
   const navigate = useNavigate();
 
   const queryClient = useQueryClient();
+
+  const [newMedication, setNewMedication] =
+    useState<Medication>(EMPTY_MEDICATION);
+  const [medicationError, setMedicationError] = useState<string | null>(null);
+
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const [medicationName, setMedicationName] = useState('');
-  const [medicationDosage, setMedicationDosage] = useState('');
-  const [medicationWayOfUse, setMedicationWayOfUse] = useState('');
-  const [medicationError, setMedicationError] = useState<string | null>(null);
+  const [editMedication, setEditMedication] =
+    useState<Medication>(EMPTY_MEDICATION);
 
   const { data: patient } = useQuery({
     queryKey: [API_PATHS.patients.basicPatientsPath(id ?? '')],
@@ -93,7 +105,7 @@ const PatientDetailsPage = () => {
       );
       queryClient.setQueryData<Patient[]>(
         [API_PATHS.patients.basicPatientsPath()],
-        (prev = []) =>
+        (prev: Patient[] = []) =>
           prev.length
             ? prev.map((p) => (p.id === updatedPatient.id ? updatedPatient : p))
             : [updatedPatient],
@@ -106,19 +118,48 @@ const PatientDetailsPage = () => {
   });
 
   const addMedicationMutation = useMutation({
-    mutationFn: (nextMedication: {
+    mutationFn: (payload: {
+      name: string;
+      dosage: string;
+      frequency: string;
+    }) => addPatientMedication(patientId, payload),
+    onSuccess: (updatedPatient) => {
+      queryClient.setQueryData(
+        [API_PATHS.patients.basicPatientsPath(updatedPatient.id)],
+        updatedPatient,
+      );
+      queryClient.setQueryData<Patient[]>(
+        [API_PATHS.patients.basicPatientsPath()],
+        (prev: Patient[] = []) =>
+          prev.length
+            ? prev.map((p) => (p.id === updatedPatient.id ? updatedPatient : p))
+            : [updatedPatient],
+      );
+      setNewMedication({
+        name: '',
+        dosage: '',
+        frequency: '',
+      });
+      setMedicationError(null);
+    },
+    onError: (error: any) => {
+      setMedicationError(
+        error?.detail ?? error?.message ?? 'Medication save failed',
+      );
+    },
+  });
+
+  const updateMedicationMutation = useMutation({
+    mutationFn: (payload: {
+      index: number;
       name: string;
       dosage: string;
       frequency: string;
     }) =>
-      updatePatient(patientId, {
-        medicalRecord: {
-          chronicConditions: patient.medicalRecord.chronicConditions,
-          allergies: patient.medicalRecord.allergies,
-          diagnosesHistory: patient.medicalRecord.diagnosesHistory,
-          patientReportedInfo: patient.medicalRecord.patientReportedInfo ?? [],
-          medications: [...patient.medicalRecord.medications, nextMedication],
-        },
+      updatePatientMedication(patientId, payload.index, {
+        name: payload.name,
+        dosage: payload.dosage,
+        frequency: payload.frequency,
       }),
     onSuccess: (updatedPatient) => {
       queryClient.setQueryData(
@@ -127,24 +168,52 @@ const PatientDetailsPage = () => {
       );
       queryClient.setQueryData<Patient[]>(
         [API_PATHS.patients.basicPatientsPath()],
-        (prev = []) =>
+        (prev: Patient[] = []) =>
           prev.length
             ? prev.map((p) => (p.id === updatedPatient.id ? updatedPatient : p))
             : [updatedPatient],
       );
-      setMedicationName('');
-      setMedicationDosage('');
-      setMedicationWayOfUse('');
+      setEditMedication(EMPTY_MEDICATION);
       setMedicationError(null);
     },
     onError: (error: any) => {
-      setMedicationError(error?.detail ?? error?.message ?? 'Medication save failed');
+      setMedicationError(
+        error?.detail ?? error?.message ?? 'Medication save failed',
+      );
+    },
+  });
+
+  const removeMedicationMutation = useMutation({
+    mutationFn: (index: number) => removePatientMedication(patientId, index),
+    onSuccess: (updatedPatient) => {
+      queryClient.setQueryData(
+        [API_PATHS.patients.basicPatientsPath(updatedPatient.id)],
+        updatedPatient,
+      );
+      queryClient.setQueryData<Patient[]>(
+        [API_PATHS.patients.basicPatientsPath()],
+        (prev: Patient[] = []) =>
+          prev.length
+            ? prev.map((p) => (p.id === updatedPatient.id ? updatedPatient : p))
+            : [updatedPatient],
+      );
+      setMedicationError(null);
+    },
+    onError: (error: any) => {
+      setMedicationError(
+        error?.detail ?? error?.message ?? 'Medication save failed',
+      );
     },
   });
 
   const reviewNotificationMutation = useMutation({
-    mutationFn: ({ notificationId, addToChart }: { notificationId: string; addToChart: boolean }) =>
-      reviewDoctorNotification(notificationId, addToChart),
+    mutationFn: ({
+      notificationId,
+      addToChart,
+    }: {
+      notificationId: string;
+      addToChart: boolean;
+    }) => reviewDoctorNotification(notificationId, addToChart),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [doctorNotificationsPath()] });
       queryClient.invalidateQueries({
@@ -157,6 +226,7 @@ const PatientDetailsPage = () => {
 
   const age = calculateAge(patient.dateOfBirth);
   const attention = needsAttention(patient);
+  // Use consultations as returned from backend (already filtered by patient)
   const consultations = historyData ?? patient.consultations ?? [];
   const patientNotifications = doctorNotifications.filter(
     (notification) => notification.patientId === patient.id,
@@ -180,9 +250,9 @@ const PatientDetailsPage = () => {
   );
 
   const handleAddMedication = () => {
-    const name = medicationName.trim();
-    const dosage = medicationDosage.trim();
-    const frequency = medicationWayOfUse.trim();
+    const name = newMedication.name.trim();
+    const dosage = newMedication.dosage.trim();
+    const frequency = newMedication.frequency.trim();
 
     if (!name || !dosage || !frequency || addMedicationMutation.isPending) {
       setMedicationError('Please fill medication, dosage and way of use');
@@ -190,6 +260,49 @@ const PatientDetailsPage = () => {
     }
 
     addMedicationMutation.mutate({ name, dosage, frequency });
+  };
+
+  const handleEditMedicationStart = (
+    medication: { name: string; dosage: string; frequency: string },
+    index: number,
+  ) => {
+    setEditMedication({
+      index,
+      name: medication.name ?? '',
+      dosage: medication.dosage ?? '',
+      frequency: medication.frequency ?? '',
+    });
+    setMedicationError(null);
+  };
+
+  const handleEditMedicationCancel = () => setEditMedication(EMPTY_MEDICATION);
+
+  const handleEditMedicationSave = () => {
+    if (editMedication.index === null || updateMedicationMutation.isPending) {
+      return;
+    }
+
+    const name = editMedication.name.trim();
+    const dosage = editMedication.dosage.trim();
+    const frequency = editMedication.frequency.trim();
+
+    if (!name || !dosage || !frequency) {
+      setMedicationError('Please fill medication, dosage and way of use');
+      return;
+    }
+
+    updateMedicationMutation.mutate({
+      index: editMedication.index,
+      name,
+      dosage,
+      frequency,
+    });
+  };
+
+  const handleRemoveMedication = (index: number) => {
+    if (removeMedicationMutation.isPending) return;
+
+    removeMedicationMutation.mutate(index);
   };
 
   return (
@@ -321,12 +434,51 @@ const PatientDetailsPage = () => {
             <Divider sx={{ my: 1 }} />
             {patient.medicalRecord.medications.length ? (
               <Stack spacing={1}>
-                {patient.medicalRecord.medications.map((m) => (
-                  <Box key={m.name}>
-                    <Typography fontWeight={500}>{m.name}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {m.dosage} • {m.frequency}
-                    </Typography>
+                {patient.medicalRecord.medications.map((m, index) => (
+                  <Box key={`${m.name}-${index}`}>
+                    {editMedication.index === index ? (
+                      <Stack spacing={1}>
+                        <MedicationFormRow
+                          medication={editMedication}
+                          submitLabel="Save"
+                          onChangeMedication={setEditMedication}
+                          onSubmit={handleEditMedicationSave}
+                          onCancel={handleEditMedicationCancel}
+                          disabled={updateMedicationMutation.isPending}
+                        />
+                      </Stack>
+                    ) : (
+                      <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={1}
+                        justifyContent="space-between"
+                        alignItems={{ xs: 'flex-start', sm: 'center' }}
+                      >
+                        <Box>
+                          <Typography fontWeight={500}>{m.name}</Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {m.dosage} • {m.frequency}
+                          </Typography>
+                        </Box>
+                        <Stack direction="row" spacing={1}>
+                          <Button
+                            variant="outlined"
+                            onClick={() => handleEditMedicationStart(m, index)}
+                            disabled={updateMedicationMutation.isPending}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="text"
+                            color="error"
+                            onClick={() => handleRemoveMedication(index)}
+                            disabled={removeMedicationMutation.isPending}
+                          >
+                            Remove
+                          </Button>
+                        </Stack>
+                      </Stack>
+                    )}
                   </Box>
                 ))}
               </Stack>
@@ -338,33 +490,13 @@ const PatientDetailsPage = () => {
             <Typography variant="subtitle2" sx={{ mb: 1 }}>
               Add medication
             </Typography>
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-              <TextField
-                label="Medication"
-                value={medicationName}
-                onChange={(e) => setMedicationName(e.target.value)}
-                fullWidth
-              />
-              <TextField
-                label="Dosage"
-                value={medicationDosage}
-                onChange={(e) => setMedicationDosage(e.target.value)}
-                fullWidth
-              />
-              <TextField
-                label="Way of use"
-                value={medicationWayOfUse}
-                onChange={(e) => setMedicationWayOfUse(e.target.value)}
-                fullWidth
-              />
-              <Button
-                variant="contained"
-                onClick={handleAddMedication}
-                disabled={addMedicationMutation.isPending}
-              >
-                Add
-              </Button>
-            </Stack>
+            <MedicationFormRow
+              medication={newMedication}
+              onChangeMedication={setNewMedication}
+              onSubmit={handleAddMedication}
+              submitLabel="Add"
+              disabled={addMedicationMutation.isPending}
+            />
             {medicationError && (
               <Typography color="error" variant="body2" sx={{ mt: 1 }}>
                 {medicationError}
@@ -398,7 +530,9 @@ const PatientDetailsPage = () => {
 
         <Card sx={{ gridColumn: '1 / -1' }}>
           <CardContent>
-            <Typography variant="h6">Information updated from the patient</Typography>
+            <Typography variant="h6">
+              Information updated from the patient
+            </Typography>
             <Divider sx={{ my: 1 }} />
             {patientUpdatedInfo.length ? (
               <Stack spacing={1}>
@@ -418,14 +552,25 @@ const PatientDetailsPage = () => {
 
         <Card sx={{ gridColumn: '1 / -1' }}>
           <CardContent>
-            <Typography variant="h6">AI detected significant patient info</Typography>
+            <Typography variant="h6">
+              AI detected significant patient info
+            </Typography>
             <Divider sx={{ my: 1 }} />
             {actionableNotifications.length ? (
               <Stack spacing={1.5}>
                 {actionableNotifications.map((notification) => (
-                  <Box key={notification.id} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 1.25 }}>
+                  <Box
+                    key={notification.id}
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 1.5,
+                      p: 1.25,
+                    }}
+                  >
                     <Typography variant="body2" fontWeight={600}>
-                      {notification.patient?.fullName ?? `${patient.firstName} ${patient.lastName}`}
+                      {notification.patient?.fullName ??
+                        `${patient.firstName} ${patient.lastName}`}
                     </Typography>
                     <Typography variant="body2" sx={{ mt: 0.5 }}>
                       “{notification.sourceMessage}”
@@ -465,7 +610,9 @@ const PatientDetailsPage = () => {
                 ))}
               </Stack>
             ) : (
-              <Typography color="text.secondary">No new AI notifications for this patient</Typography>
+              <Typography color="text.secondary">
+                No new AI notifications for this patient
+              </Typography>
             )}
           </CardContent>
         </Card>

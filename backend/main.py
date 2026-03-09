@@ -381,7 +381,7 @@ def verify_password(value: str, account: Account) -> bool:
 
 
 def serialize_account(account: Account) -> Dict[str, Any]:
-    roles = ensure_list(parse_json_value(account.roles, ["user"]))
+    roles = ensure_list(parse_json_value(account.roles, ["doctor"]))
     return {
         "id": account.id,
         "email": account.email,
@@ -455,6 +455,12 @@ class PatientMedicalRecord(BaseModel):
     diagnosesHistory: List[str] = []
     patientReportedInfo: List[str] = []
 
+class MedicationPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    name: str
+    dosage: str
+    frequency: str
+
 class PatientCreate(BaseModel):
     model_config = ConfigDict(extra="ignore")
     firstName: str
@@ -503,6 +509,10 @@ class PatientAiQuestionPayload(BaseModel):
 class DoctorNotificationReviewPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     addToChart: bool = False
+
+class ConsultationNotesPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    doctorNotes: str
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -565,9 +575,9 @@ def signup(payload: SignupPayload, session: Session = Depends(get_session)):
         email=email,
         passwordHash=password_data["hash"],
         passwordSalt=password_data["salt"],
-        role="user",
+        role="doctor",
         userId=user.id,
-        roles=json.dumps(["user"]),
+        roles=json.dumps(["doctor"]),
         accessToken=tokens["accessToken"],
         refreshToken=tokens["refreshToken"],
         createdAt=now,
@@ -911,7 +921,7 @@ def get_doctor_notifications(
     session: Session = Depends(get_session),
 ):
     account = get_account_by_access_token(authorization, session)
-    if account.role != "doctor":
+    if account.role not in ("doctor", "user"):
         raise HTTPException(status_code=403, detail="Only doctor accounts are allowed")
 
     notifications = session.exec(
@@ -940,7 +950,7 @@ def review_doctor_notification(
     session: Session = Depends(get_session),
 ):
     account = get_account_by_access_token(authorization, session)
-    if account.role != "doctor":
+    if account.role not in ("doctor", "user"):
         raise HTTPException(status_code=403, detail="Only doctor accounts are allowed")
 
     notification = session.get(DoctorNotification, notification_id)
@@ -1134,10 +1144,94 @@ def update_patient(
     session.refresh(patient)
     return serialize_patient(patient)
 
+@app.post("/patients/{patient_id}/medications")
+def add_patient_medication(
+    patient_id: str,
+    payload: MedicationPayload,
+    session: Session = Depends(get_session),
+):
+    patient = session.get(Patient, patient_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    medical_record = build_medical_record(parse_json_value(patient.medicalRecord, {}))
+    medications = ensure_list(medical_record.get("medications"))
+    medications.append({
+        "name": payload.name.strip(),
+        "dosage": payload.dosage.strip(),
+        "frequency": payload.frequency.strip(),
+    })
+    medical_record["medications"] = medications
+    patient.medicalRecord = json.dumps(medical_record)
+    patient.updatedAt = datetime.now().isoformat()
+
+    session.add(patient)
+    session.commit()
+    session.refresh(patient)
+    return serialize_patient(patient)
+
+@app.put("/patients/{patient_id}/medications/{medication_index}")
+def update_patient_medication(
+    patient_id: str,
+    medication_index: int,
+    payload: MedicationPayload,
+    session: Session = Depends(get_session),
+):
+    patient = session.get(Patient, patient_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    medical_record = build_medical_record(parse_json_value(patient.medicalRecord, {}))
+    medications = ensure_list(medical_record.get("medications"))
+
+    if medication_index < 0 or medication_index >= len(medications):
+        raise HTTPException(status_code=404, detail="Medication not found")
+
+    medications[medication_index] = {
+        "name": payload.name.strip(),
+        "dosage": payload.dosage.strip(),
+        "frequency": payload.frequency.strip(),
+    }
+    medical_record["medications"] = medications
+    patient.medicalRecord = json.dumps(medical_record)
+    patient.updatedAt = datetime.now().isoformat()
+
+    session.add(patient)
+    session.commit()
+    session.refresh(patient)
+    return serialize_patient(patient)
+
+@app.delete("/patients/{patient_id}/medications/{medication_index}")
+def remove_patient_medication(
+    patient_id: str,
+    medication_index: int,
+    session: Session = Depends(get_session),
+):
+    patient = session.get(Patient, patient_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    medical_record = build_medical_record(parse_json_value(patient.medicalRecord, {}))
+    medications = ensure_list(medical_record.get("medications"))
+
+    if medication_index < 0 or medication_index >= len(medications):
+        raise HTTPException(status_code=404, detail="Medication not found")
+
+    medications.pop(medication_index)
+    medical_record["medications"] = medications
+    patient.medicalRecord = json.dumps(medical_record)
+    patient.updatedAt = datetime.now().isoformat()
+
+    session.add(patient)
+    session.commit()
+    session.refresh(patient)
+    return serialize_patient(patient)
+
 @app.post("/consultations/analyze")
 async def analyze_session(
     patient_id: str = Form(...),
     file: UploadFile = File(...),
+    authorization: str | None = Header(default=None),
     session: Session = Depends(get_session)
 ):
     try:
@@ -1180,6 +1274,23 @@ async def analyze_session(
         if not patient:
             raise HTTPException(status_code=404, detail="Patient not found")
 
+        doctor_account = None
+        if authorization:
+            try:
+                account = get_account_by_access_token(authorization, session)
+                if account and account.role == "doctor":
+                    doctor_account = account
+            except Exception:
+                doctor_account = None
+
+        if doctor_account:
+            assigned_doctor_ids = ensure_list(
+                parse_json_value(patient.assignedDoctorIds, [])
+            )
+            if doctor_account.id not in assigned_doctor_ids:
+                assigned_doctor_ids.append(doctor_account.id)
+                patient.assignedDoctorIds = json.dumps(assigned_doctor_ids)
+
         update_patient_record_from_consultation(
             patient,
             ai_soap=ai_soap_raw,
@@ -1190,7 +1301,7 @@ async def analyze_session(
         new_visit = Consultation(
             id=str(uuid.uuid4()),
             patientId=patient_id,
-            doctorId="doc-001",
+            doctorId=doctor_account.id if doctor_account else "doc-001",
             transcript=raw_text,
             aiSummary=ai_soap,
             aiRecommendations=ai_recs
@@ -1235,6 +1346,23 @@ def get_full_consultation_details(
     
     if not consultation:
         raise HTTPException(status_code=404, detail="Consultation not found")
+
+    return serialize_consultation(consultation, include_patient=True)
+
+@app.put("/consultations/{consultation_id}/notes")
+def update_consultation_notes(
+    consultation_id: str,
+    payload: ConsultationNotesPayload,
+    session: Session = Depends(get_session),
+):
+    consultation = session.get(Consultation, consultation_id)
+    if not consultation:
+        raise HTTPException(status_code=404, detail="Consultation not found")
+
+    consultation.doctorNotes = payload.doctorNotes
+    session.add(consultation)
+    session.commit()
+    session.refresh(consultation)
 
     return serialize_consultation(consultation, include_patient=True)
 @app.get("/all-visits")
