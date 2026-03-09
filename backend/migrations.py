@@ -87,10 +87,66 @@ def _migration_003_add_missing_patient_columns(connection: sqlite3.Connection) -
         connection.execute("ALTER TABLE patient ADD COLUMN updatedAt TEXT")
 
 
+def _migration_004_add_consultation_columns(connection: sqlite3.Connection) -> None:
+    if not _column_exists(connection, "consultation", "doctorNotes"):
+        connection.execute("ALTER TABLE consultation ADD COLUMN doctorNotes TEXT")
+
+    if not _column_exists(connection, "consultation", "aiSummary"):
+        connection.execute("ALTER TABLE consultation ADD COLUMN aiSummary TEXT")
+
+    if not _column_exists(connection, "consultation", "aiRecommendations"):
+        connection.execute(
+            "ALTER TABLE consultation ADD COLUMN aiRecommendations TEXT DEFAULT '[]'"
+        )
+
+def _migration_005_remove_user_standard_roles(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        UPDATE account
+        SET role = 'doctor'
+        WHERE role IN ('user', 'standard') OR role IS NULL OR TRIM(role) = ''
+        """
+    )
+
+    connection.execute(
+        """
+        UPDATE account
+        SET roles = '["doctor"]'
+        WHERE roles IS NULL
+           OR TRIM(roles) = ''
+           OR roles = '[]'
+           OR roles LIKE '%"user"%'
+           OR roles LIKE '%"standard"%'
+        """
+    )
+
+def _migration_006_fix_unknown_roles(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        UPDATE account
+        SET role = 'doctor'
+        WHERE role NOT IN ('admin', 'doctor', 'patient')
+           OR role IS NULL
+           OR TRIM(role) = ''
+        """
+    )
+
+    connection.execute(
+        """
+        UPDATE account
+        SET roles = '["doctor"]'
+        WHERE roles IS NULL OR TRIM(roles) = '' OR roles = '[]'
+        """
+    )
+
+
 MIGRATIONS: List[Migration] = [
     ("001_add_account_role_and_password_salt", _migration_001_add_account_role_and_password_salt),
     ("002_add_patient_account_link", _migration_002_add_patient_account_link),
     ("003_add_missing_patient_columns", _migration_003_add_missing_patient_columns),
+    ("004_add_consultation_columns", _migration_004_add_consultation_columns),
+    ("005_remove_user_standard_roles", _migration_005_remove_user_standard_roles),
+    ("006_fix_unknown_roles", _migration_006_fix_unknown_roles),
 ]
 
 

@@ -14,14 +14,16 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SaveIcon from '@mui/icons-material/Save';
 
 import { useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { API_PATHS } from 'api';
-import { getConsultationFull } from 'api/consultations';
+import { getConsultationFull, updateConsultationNotes } from 'api/consultations';
 import utils from 'utils';
 import { formatAiSummary } from 'pages/Patient/utils';
 
 const ConsultationDetailsPage = () => {
   const { consultationId } = useParams();
+  const queryClient = useQueryClient();
 
   const { data: consultation } = useQuery({
     queryKey: [
@@ -30,6 +32,30 @@ const ConsultationDetailsPage = () => {
     queryFn: () => getConsultationFull(consultationId ?? ''),
     enabled: Boolean(consultationId),
   });
+
+  const [notes, setNotes] = useState('');
+  const [notesError, setNotesError] = useState<string | null>(null);
+
+  const saveNotesMutation = useMutation({
+    mutationFn: (value: string) =>
+      updateConsultationNotes(consultationId ?? '', value),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(
+        [API_PATHS.consultations.consultationFullPath(consultationId ?? '')],
+        updated,
+      );
+      setNotesError(null);
+    },
+    onError: (error: any) => {
+      setNotesError(error?.detail ?? error?.message ?? 'Save failed');
+    },
+  });
+
+  useEffect(() => {
+    if (consultation?.doctorNotes) {
+      setNotes(consultation.doctorNotes);
+    }
+  }, [consultation?.doctorNotes]);
 
   if (!consultation) return <></>;
 
@@ -93,7 +119,8 @@ const ConsultationDetailsPage = () => {
             fullWidth
             multiline
             minRows={6}
-            defaultValue={consultation.doctorNotes}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
             placeholder="Write your medical notes, conclusions, decisions..."
           />
 
@@ -104,10 +131,20 @@ const ConsultationDetailsPage = () => {
               mt: 2,
             }}
           >
-            <Button variant="contained" startIcon={<SaveIcon />}>
+            <Button
+              variant="contained"
+              startIcon={<SaveIcon />}
+              disabled={saveNotesMutation.isPending}
+              onClick={() => saveNotesMutation.mutate(notes)}
+            >
               Save notes
             </Button>
           </Box>
+          {notesError && (
+            <Typography color="error" variant="body2" sx={{ mt: 1 }}>
+              {notesError}
+            </Typography>
+          )}
         </CardContent>
       </Card>
 

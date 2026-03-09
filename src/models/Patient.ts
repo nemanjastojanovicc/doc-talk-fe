@@ -9,6 +9,7 @@ export type LifestyleHabits = {
 };
 
 export type Medication = {
+  index?: number;
   name: string;
   dosage: string;
   frequency: string;
