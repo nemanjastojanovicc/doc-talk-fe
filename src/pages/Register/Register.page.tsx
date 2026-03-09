@@ -41,7 +41,7 @@ const Register: React.FC<RegisterProps> = () => {
     useTanstackMutation<AuthBody, Omit<RegisterFormValues, 'confirmPassword'>>({
       onSuccess: (data) => {
         setCredentials(data);
-        navigate(APP_URI.PROFILE);
+        navigate(APP_URI.HOME);
       },
       onError: (error) => {
         console.error(error);

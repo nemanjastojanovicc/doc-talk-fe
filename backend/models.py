@@ -19,12 +19,12 @@ class Account(SQLModel, table=True):
     email: str = Field(index=True)
     passwordHash: str
     passwordSalt: Optional[str] = None
-    role: str = "user"
+    role: str = "doctor"
     isEmailVerified: Optional[bool] = False
     pendingEmail: Optional[bool] = None
     state: str = "active"
     userId: str = Field(foreign_key="user.id", index=True)
-    roles: str = '["user"]'
+    roles: str = '["doctor"]'
     accessToken: Optional[str] = None
     refreshToken: Optional[str] = None
     createdAt: str = Field(default_factory=lambda: datetime.now().isoformat())

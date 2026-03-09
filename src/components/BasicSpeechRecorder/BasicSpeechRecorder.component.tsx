@@ -182,8 +182,8 @@ const BasicSpeechRecorder: FC<Props> = ({ patientId, onUploaded }) => {
       const ext = type.includes('mp4')
         ? 'm4a'
         : type.includes('webm')
-        ? 'webm'
-        : 'webm';
+          ? 'webm'
+          : 'webm';
 
       fileToUpload = new File([blob], `recording.${ext}`, { type });
     }
@@ -370,18 +370,6 @@ const BasicSpeechRecorder: FC<Props> = ({ patientId, onUploaded }) => {
               </Typography>
 
               <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-                <Chip
-                  label={`Consultation: ${result.id.slice(0, 8)}…`}
-                  size="small"
-                  sx={{ borderRadius: 2 }}
-                  variant="outlined"
-                />
-                <Chip
-                  label={`Patient: ${result.patientId}`}
-                  size="small"
-                  sx={{ borderRadius: 2 }}
-                  variant="outlined"
-                />
                 <Chip
                   label={new Date(result.date).toLocaleString()}
                   size="small"

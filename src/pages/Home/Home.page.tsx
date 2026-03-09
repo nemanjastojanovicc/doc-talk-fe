@@ -65,8 +65,8 @@ const Home: React.FC = () => {
         activeFilter === 'needsAttention'
           ? needsAttention(p)
           : activeFilter === 'active'
-          ? p.isActive
-          : true;
+            ? p.isActive
+            : true;
 
       return matchesSearch && matchesFilter;
     });
@@ -157,6 +157,7 @@ const Home: React.FC = () => {
           size="small"
           placeholder="Search patients by name…"
           value={search}
+          disabled={!totalPatients}
           onChange={(e) => setSearch(e.target.value)}
         />
       </Stack>
@@ -192,13 +193,13 @@ const Home: React.FC = () => {
         {/* ACTIVE FILTER */}
         <Card
           sx={{
-            cursor: 'pointer',
+            ...(totalPatients && { cursor: 'pointer' }),
             border:
               activeFilter === 'active' ? '2px solid' : '2px solid transparent',
             borderColor:
               activeFilter === 'active' ? 'primary.main' : 'transparent',
           }}
-          onClick={() => toggleFilter('active')}
+          {...(totalPatients && { onClick: () => toggleFilter('active') })}
         >
           <CardContent>
             <Stack direction="row" spacing={2} alignItems="center">
@@ -218,7 +219,7 @@ const Home: React.FC = () => {
         {/* NEEDS ATTENTION FILTER */}
         <Card
           sx={{
-            cursor: 'pointer',
+            ...(totalPatients && { cursor: 'pointer' }),
             border:
               activeFilter === 'needsAttention'
                 ? '2px solid'
@@ -228,7 +229,9 @@ const Home: React.FC = () => {
                 ? 'warning.main'
                 : 'transparent',
           }}
-          onClick={() => toggleFilter('needsAttention')}
+          {...(totalPatients && {
+            onClick: () => toggleFilter('needsAttention'),
+          })}
         >
           <CardContent>
             <Stack direction="row" spacing={2} alignItems="center">

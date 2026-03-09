@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'standard' | 'user' | 'patient';
+export type Role = 'admin' | 'doctor' | 'patient';
 
 export type Account = {
   email: string;
