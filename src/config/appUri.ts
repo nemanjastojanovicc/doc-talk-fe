@@ -9,6 +9,5 @@ export const APP_URI = {
   LOGIN: '/login',
   FORGOT_PASSWORD: '/forgot-password',
 
-  USER_INFO: '/user-info',
   PROFILE: '/profile',
 };

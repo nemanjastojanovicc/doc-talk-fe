@@ -41,9 +41,6 @@ const Header = () => {
                 </Link>
               ) : (
                 <>
-                  <Link to={APP_URI.USER_INFO}>
-                    <Button variant="text">My Info</Button>
-                  </Link>
                   <Link to={APP_URI.PROFILE}>
                     <Button variant="text">Profile</Button>
                   </Link>
